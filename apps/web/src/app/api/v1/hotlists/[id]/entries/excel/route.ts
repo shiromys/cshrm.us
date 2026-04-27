@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, hotlistEntries, hotlists } from "@/lib/db";
+import type { NewHotlistEntry } from "@cloudsourcehrm/db";
 import { eq } from "drizzle-orm";
 import { normaliseName } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -69,7 +70,7 @@ export async function POST(
 
     entry["displayName"] = normaliseName(entry["rawName"] as string);
 
-    const [e] = await db.insert(hotlistEntries).values(entry as Parameters<typeof db.insert>[1]).returning();
+    const [e] = await db.insert(hotlistEntries).values(entry as unknown as NewHotlistEntry).returning();
     insertedEntries.push(e);
   }
 
