@@ -3,6 +3,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { forgotPasswordSchema } from "@/lib/schemas";
+import type { z } from "zod";
+
+type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 import { forgotPassword } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -15,7 +18,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ForgotPasswordInput>({
     resolver: zodResolver(forgotPasswordSchema),
   });
 
