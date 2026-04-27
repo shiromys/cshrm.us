@@ -56,7 +56,7 @@ export async function POST(
         ));
       const platformContacts = (await platformQ).map((c) => ({ ...c, source: "platform" as const }));
 
-      let employerContactsList: typeof platformContacts = [];
+      let employerContactsList: { email: string; name: string; id: string; source: "employer" }[] = [];
       if (campaign.includeEmployerContacts && campaign.targetType === "employer") {
         const ecQ = await db.select({ email: employerContacts.email, name: employerContacts.name, id: employerContacts.id })
           .from(employerContacts)
