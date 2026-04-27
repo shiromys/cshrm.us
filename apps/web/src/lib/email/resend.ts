@@ -1,13 +1,18 @@
 import { Resend as ResendSDK } from "resend";
 
-const client = new ResendSDK(process.env.RESEND_API_KEY ?? "");
+// Lazy init — avoids "Missing API key" error during Next.js build-time static analysis
+let _client: ResendSDK | null = null;
+function getClient(): ResendSDK {
+  if (!_client) _client = new ResendSDK(process.env.RESEND_API_KEY ?? "");
+  return _client;
+}
 
 const FROM = process.env.EMAIL_FROM_ADDRESS ?? "noreply@mail.cloudsourcehrm.us";
 const FROM_NAME = "CloudSourceHRM";
 
 export const resend = {
   async sendEmailVerification(to: string, name: string, url: string) {
-    return client.emails.send({
+    return getClient().emails.send({
       from: `${FROM_NAME} <${FROM}>`,
       to,
       subject: "Verify your CloudSourceHRM email",
@@ -27,7 +32,7 @@ export const resend = {
   },
 
   async sendPasswordReset(to: string, name: string, url: string) {
-    return client.emails.send({
+    return getClient().emails.send({
       from: `${FROM_NAME} <${FROM}>`,
       to,
       subject: "Reset your CloudSourceHRM password",
@@ -52,7 +57,7 @@ export const resend = {
     html: string;
     replyTo?: string;
   }) {
-    return client.emails.send({
+    return getClient().emails.send({
       from: `${FROM_NAME} <${FROM}>`,
       to: opts.to,
       subject: opts.subject,
@@ -68,8 +73,7 @@ export const resend = {
     text: string;
     replyTo?: string;
   }>) {
-    // Resend v2+: batch API moved from client.emails.sendBatch → client.batch.send
-    return client.batch.send(
+    return getClient().batch.send(
       emails.map((e) => ({
         from: `${FROM_NAME} <${FROM}>`,
         to: e.to,
@@ -82,4 +86,9 @@ export const resend = {
   },
 };
 
-export { client as resendClient };
+// Export as a getter so worker.ts can use resendClient.emails.send() lazily too
+export const resendClient = new Proxy({} as ResendSDK, {
+  get(_target, prop) {
+    return getClient()[prop as keyof ResendSDK];
+  },
+});
