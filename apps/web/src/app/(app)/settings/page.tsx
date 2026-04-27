@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,18 +11,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, CreditCard, Zap } from "lucide-react";
 
-export default function SettingsPage() {
-  const { data: session } = useSession();
-  const user = session?.user as unknown as Record<string, string> | undefined;
-  const [replyTo, setReplyTo] = useState(user?.replyToEmail ?? "");
-  const [saving, setSaving] = useState(false);
+// Isolated component so useSearchParams is inside a Suspense boundary (required by Next.js 15)
+function PaymentVerifier() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
     if (!sessionId) return;
 
-    // Standard plan upgrade
     if (searchParams.get("upgraded") === "1") {
       fetch("/api/v1/stripe/verify", {
         method: "POST",
@@ -41,7 +37,6 @@ export default function SettingsPage() {
         .catch(() => toast.error("Could not verify payment. Please contact support."));
     }
 
-    // CHRMNEXUS add-on
     if (searchParams.get("chrmnexus") === "1") {
       fetch("/api/v1/chrmnexus/verify", {
         method: "POST",
@@ -60,6 +55,15 @@ export default function SettingsPage() {
         .catch(() => toast.error("Could not verify payment. Please contact support."));
     }
   }, [searchParams]);
+
+  return null;
+}
+
+export default function SettingsPage() {
+  const { data: session } = useSession();
+  const user = session?.user as unknown as Record<string, string> | undefined;
+  const [replyTo, setReplyTo] = useState(user?.replyToEmail ?? "");
+  const [saving, setSaving] = useState(false);
 
   async function saveReplyTo() {
     setSaving(true);
@@ -103,6 +107,11 @@ export default function SettingsPage() {
 
   return (
     <div className="p-8 max-w-3xl">
+      {/* Suspense required by Next.js 15 for useSearchParams */}
+      <Suspense fallback={null}>
+        <PaymentVerifier />
+      </Suspense>
+
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
       {/* Account Info */}
