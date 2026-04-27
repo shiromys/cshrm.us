@@ -10,10 +10,8 @@ let _db: PostgresJsDatabase<Schema> | null = null;
 
 function getDb(): PostgresJsDatabase<Schema> {
   if (!_db) {
-    const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? "";
-    if (!connectionString) {
-      throw new Error("POSTGRES_URL or DATABASE_URL environment variable is required");
-    }
+    // Use a placeholder during build — postgres connects lazily so this won't fail until a real query runs at runtime
+    const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? "postgresql://localhost/placeholder";
     const client = postgres(connectionString, { max: 10 });
     _db = drizzle(client, { schema });
   }
