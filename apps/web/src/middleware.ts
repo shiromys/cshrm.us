@@ -29,10 +29,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Get session from Better Auth
+  // Use localhost for internal fetches — avoids SSL errors when the public URL is HTTPS
+  // but the container-internal connection is plain HTTP (common on Railway)
+  const internalBase = `http://localhost:${process.env.PORT ?? 3000}`;
   const session = await betterFetch<{ session: Session; user: { role: string } }>(
     "/api/auth/get-session",
     {
-      baseURL: request.nextUrl.origin,
+      baseURL: internalBase,
       headers: { cookie: request.headers.get("cookie") ?? "" },
     }
   );
