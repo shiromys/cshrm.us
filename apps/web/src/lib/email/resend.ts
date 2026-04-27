@@ -57,7 +57,7 @@ export const resend = {
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
-      reply_to: opts.replyTo,
+      replyTo: opts.replyTo,
     });
   },
 
@@ -76,7 +76,7 @@ export const resend = {
         subject: e.subject,
         html: e.html,
         text: e.text,
-        reply_to: e.replyTo,
+        replyTo: e.replyTo,
       }))
     );
   },
