@@ -24,7 +24,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const router = useRouter();
-  const isAdmin = session?.user?.role === "admin";
+  const isAdmin = (session?.user as unknown as Record<string, string>)?.role === "admin";
 
   return (
     <aside className="w-64 min-h-screen bg-brand-600 text-white flex flex-col">
