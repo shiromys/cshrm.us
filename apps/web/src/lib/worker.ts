@@ -31,7 +31,7 @@ async function sendEmail(job: CampaignEmailJob): Promise<{ provider: string }> {
       subject: job.subject,
       html: job.bodyHtml,
       text: job.bodyText,
-      reply_to: job.replyToEmail,
+      replyTo: job.replyToEmail,
     });
     return { provider: "resend" };
   }
