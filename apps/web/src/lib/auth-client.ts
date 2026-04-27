@@ -10,7 +10,9 @@ export const {
   signUp,
   signOut,
   useSession,
-  forgotPassword,
   resetPassword,
   verifyEmail,
 } = authClient;
+
+// Better Auth 1.6+ uses requestPasswordReset instead of forgotPassword
+export const forgotPassword = authClient.requestPasswordReset;
