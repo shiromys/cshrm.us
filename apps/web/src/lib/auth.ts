@@ -30,7 +30,7 @@ export const auth = betterAuth({
       await resend.sendEmailVerification(user.email, user.name, url);
     },
   },
-  secret: process.env.BETTER_AUTH_SECRET!,
+  secret: process.env.BETTER_AUTH_SECRET ?? "build-time-placeholder-secret-do-not-use",
   baseURL: process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   trustedOrigins: [
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
