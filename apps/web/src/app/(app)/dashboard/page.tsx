@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   if (!session?.user) return null;
 
   const userId = session.user.id;
-  const tier = (session.user as Record<string, string>).tier ?? "free";
+  const tier = (session.user as unknown as Record<string, string>).tier ?? "free";
 
   // Stats
   const [campaignCount] = await db.select({ count: count() }).from(campaigns)

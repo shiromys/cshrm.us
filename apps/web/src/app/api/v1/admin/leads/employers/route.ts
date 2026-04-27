@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 async function requireAdmin(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return null;
-  if ((session.user as Record<string, string>).role !== "admin") return null;
+  if ((session.user as unknown as Record<string, string>).role !== "admin") return null;
   return session.user;
 }
 

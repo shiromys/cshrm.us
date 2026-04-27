@@ -88,9 +88,9 @@ export function AppSidebar() {
       <div className="p-4 border-t border-white/10 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-blue-200">
-            {(session?.user as Record<string, string>)?.tier === "standard" ? "Standard — $95/mo" : "Free Tier"}
+            {(session?.user as unknown as Record<string, string>)?.tier === "standard" ? "Standard — $95/mo" : "Free Tier"}
           </span>
-          {(session?.user as Record<string, string>)?.tier === "free" && (
+          {(session?.user as unknown as Record<string, string>)?.tier === "free" && (
             <Link href="/settings#upgrade" className="text-xs bg-white text-brand-600 px-2 py-1 rounded font-semibold hover:bg-blue-50">
               Upgrade
             </Link>

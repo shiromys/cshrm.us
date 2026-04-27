@@ -13,7 +13,7 @@ import { CheckCircle2, CreditCard, Zap } from "lucide-react";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
-  const user = session?.user as Record<string, string> | undefined;
+  const user = session?.user as unknown as Record<string, string> | undefined;
   const [replyTo, setReplyTo] = useState(user?.replyToEmail ?? "");
   const [saving, setSaving] = useState(false);
   const searchParams = useSearchParams();

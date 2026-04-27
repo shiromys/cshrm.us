@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Already subscribed to CHRMNEXUS" }, { status: 400 });
     }
 
-    if ((session.user as Record<string, string>).tier === "free") {
+    if ((session.user as unknown as Record<string, string>).tier === "free") {
       return NextResponse.json(
         { error: "CHRMNEXUS add-on requires an active Standard subscription" },
         { status: 400 }

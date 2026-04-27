@@ -9,7 +9,7 @@ import { Users, Mail, FileUp, UserCheck } from "lucide-react";
 
 export default async function AdminPage() {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user || (session.user as Record<string, string>).role !== "admin") redirect("/dashboard");
+  if (!session?.user || (session.user as unknown as Record<string, string>).role !== "admin") redirect("/dashboard");
 
   const [pendingEmployerLeads] = await db.select({ count: count() }).from(employerLeads).where(eq(employerLeads.status, "pending"));
   const [pendingCandidateLeads] = await db.select({ count: count() }).from(candidateLeads).where(eq(candidateLeads.status, "pending"));

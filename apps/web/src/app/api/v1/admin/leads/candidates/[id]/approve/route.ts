@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user || (session.user as Record<string, string>).role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user || (session.user as unknown as Record<string, string>).role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await db.update(candidateLeads).set({ status: "approved", reviewedBy: session.user.id, reviewedAt: new Date() }).where(eq(candidateLeads.id, id));
   return NextResponse.json({ success: true });
 }

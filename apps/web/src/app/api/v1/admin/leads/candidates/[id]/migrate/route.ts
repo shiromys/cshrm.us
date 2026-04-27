@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user || (session.user as Record<string, string>).role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user || (session.user as unknown as Record<string, string>).role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const lead = await db.query.candidateLeads.findFirst({ where: (l, { eq }) => eq(l.id, id) });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (lead.status !== "approved") return NextResponse.json({ error: "Lead must be approved first" }, { status: 400 });
