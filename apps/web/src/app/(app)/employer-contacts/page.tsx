@@ -51,7 +51,7 @@ export default function EmployerContactsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Upload failed");
       toast.success(
-        `CSV submitted for admin review (${json.rowCount} rows). Contacts will appear once approved.`
+        `Imported ${json.inserted} contact${json.inserted === 1 ? "" : "s"} successfully${json.skipped > 0 ? ` (${json.skipped} skipped — missing email or name)` : ""}.`
       );
       qc.invalidateQueries({ queryKey: ["employer-contacts"] });
     } catch (err: any) {
