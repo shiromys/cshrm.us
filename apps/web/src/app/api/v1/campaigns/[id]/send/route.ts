@@ -40,12 +40,15 @@ export async function POST(
     // Build recipient list
     let recipients: Array<{ email: string; name: string; id: string; source: "platform" | "employer" }> = [];
 
-    if (campaign.targetType === "hotlist" && campaign.hotlistId) {
+    if (campaign.targetType === "hotlist") {
+      if (!campaign.hotlistId) {
+        return NextResponse.json({ error: "This campaign targets a hotlist but no hotlist was selected. Edit the campaign and choose a hotlist." }, { status: 400 });
+      }
       const entries = await db.select().from(hotlistEntries).where(eq(hotlistEntries.hotlistId, campaign.hotlistId));
       recipients = entries
         .filter((e) => e.contactEmail)
         .map((e) => ({ email: e.contactEmail!, name: e.displayName, id: e.id, source: "platform" as const }));
-    } else {
+    } else if (campaign.targetType === "employer" || campaign.targetType === "candidate") {
       const platformQ = db.select({ email: contacts.email, name: contacts.name, id: contacts.id })
         .from(contacts)
         .where(and(
@@ -71,7 +74,12 @@ export async function POST(
     }
 
     if (recipients.length === 0) {
-      return NextResponse.json({ error: "No active recipients found. Add contacts to Platform Contacts or My Contacts first." }, { status: 400 });
+      const hint = campaign.targetType === "employer"
+        ? "No active recipients found. Upload contacts to My Contacts (make sure 'Include My Contacts' is checked) or ask your admin to add Platform Contacts."
+        : campaign.targetType === "candidate"
+        ? "No active candidate contacts found in the platform database."
+        : "The selected hotlist has no entries with email addresses.";
+      return NextResponse.json({ error: hint }, { status: 400 });
     }
 
     // Mark campaign as sending
