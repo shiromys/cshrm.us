@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, contacts } from "@/lib/db";
 import { eq, and, isNull, ilike, or } from "drizzle-orm";
 import { headers } from "next/headers";
+import type { NewContact } from "@cloudsourcehrm/db/schema";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
       return undefined;
     };
 
-    const toInsert = rows
+    const toInsert: NewContact[] = rows
       .map((row) => ({
         email: get(row, "email", "Email", "EMAIL", "e-mail"),
         name:  get(row, "name", "Name", "NAME", "full_name", "Full Name"),
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
         contactType: contactType as "employer" | "candidate",
         source: "csv_import" as const,
       }))
-      .filter((r) => r.email && r.name);
+      .filter((r): r is NewContact => !!(r.email && r.name));
 
     if (toInsert.length === 0) {
       return NextResponse.json(
