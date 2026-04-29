@@ -105,8 +105,8 @@ export default function EmployerContactsPage() {
         />
       )}
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-        <strong>Note:</strong> Imported files are reviewed by the platform admin before contacts appear here. Manually added contacts are available immediately.
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-600">
+        <strong>My Contacts</strong> is your private employer/hiring manager CRM — visible only to you. Use <strong>Platform Contacts</strong> to add contacts that all campaigns can target (employer or candidate).
       </div>
 
       <Card>

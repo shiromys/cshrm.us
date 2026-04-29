@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import Image from "next/image";
 
 export function PublicFooter() {
   return (
@@ -8,10 +8,8 @@ export function PublicFooter() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <Link href="/" className="flex items-center gap-2 font-bold text-xl mb-4">
-              <div className="w-8 h-8 bg-pub-600 rounded-lg flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
-              </div>
+            <Link href="/" className="flex items-center gap-2.5 font-bold text-xl mb-4">
+              <Image src="/logo.png" alt="CloudSourceHRM" width={36} height={36} className="rounded-lg shrink-0" />
               <span className="text-white">CloudSource</span>
               <span className="text-pub-400">HRM</span>
             </Link>

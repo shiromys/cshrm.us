@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 export function PublicNav() {
   const [open, setOpen] = useState(false);
@@ -11,10 +12,8 @@ export function PublicNav() {
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
       <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <div className="w-8 h-8 bg-pub-600 rounded-lg flex items-center justify-center">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
+        <Link href="/" className="flex items-center gap-2.5 font-bold text-xl">
+          <Image src="/logo.png" alt="CloudSourceHRM" width={36} height={36} className="rounded-lg shrink-0" />
           <span className="text-slate-900">CloudSource</span>
           <span className="text-pub-600">HRM</span>
         </Link>

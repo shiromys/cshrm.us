@@ -9,6 +9,13 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CloudSourceHRM — SaaS HRM Platform",
   description: "Manage job campaigns, candidate hotlists, and bulk email outreach",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: { url: "/logo-64.png", sizes: "64x64" },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
