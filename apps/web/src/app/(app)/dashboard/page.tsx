@@ -5,7 +5,7 @@ import { eq, and, isNull, count, gte } from "drizzle-orm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { Mail, List, Users, Building2, TrendingUp, PlusCircle } from "lucide-react";
+import { Mail, List, Users, Building2, TrendingUp, PlusCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default async function DashboardPage() {
@@ -44,6 +44,56 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Setup guide — shown until Platform Contacts has data ── */}
+      {(contactCount?.count ?? 0) === 0 && (
+        <div className="mb-6 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/60 p-6">
+          <h2 className="text-base font-bold text-blue-900 mb-1">Get started — 3 steps to your first campaign</h2>
+          <p className="text-sm text-blue-700 mb-5">Platform Contacts is empty. Follow these steps and this banner disappears.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                step: "1",
+                done: false,
+                title: "Add contacts to Platform Contacts",
+                body: "Go to Platform Contacts → click Import CSV/Excel, choose Employer or Candidate from the dropdown, then upload your file. Or use Add Contact to add one at a time.",
+                href: "/contacts",
+                cta: "Go to Platform Contacts →",
+              },
+              {
+                step: "2",
+                done: (myContactCount?.count ?? 0) > 0,
+                title: "Optionally add private My Contacts",
+                body: "My Contacts is your personal employer/hiring-manager CRM. Import a spreadsheet or add contacts one by one. Only you can see these.",
+                href: "/employer-contacts",
+                cta: "Go to My Contacts →",
+              },
+              {
+                step: "3",
+                done: (campaignCount?.count ?? 0) > 0,
+                title: "Create and send a campaign",
+                body: "Create a campaign, pick Employer Contacts or Candidate Contacts as the target, and hit Send. Contacts you added in step 1 (and 2) will receive it.",
+                href: "/campaigns/new",
+                cta: "New Campaign →",
+              },
+            ].map(({ step, done, title, body, href, cta }) => (
+              <div key={step} className={`rounded-lg bg-white border p-4 flex flex-col gap-2 ${done ? "border-green-200" : "border-blue-100"}`}>
+                <div className="flex items-center gap-2">
+                  {done
+                    ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                    : <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{step}</span>
+                  }
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed flex-1">{body}</p>
+                <Link href={href} className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                  {cta} <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {tier === "free" && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
