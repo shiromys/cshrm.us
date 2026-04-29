@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyHmacToken } from "@/lib/utils";
-import { db, emailLogs } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { db, emailLogs, campaigns } from "@/lib/db";
+import { eq, sql } from "drizzle-orm";
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from(
@@ -17,10 +17,19 @@ export async function GET(request: NextRequest) {
 
   const secret = process.env.OPEN_TRACKING_HMAC_SECRET ?? "";
   if (verifyHmacToken(secret, `${id}:${email}`, token)) {
-    await db
-      .update(emailLogs)
-      .set({ status: "opened", openedAt: new Date() })
-      .where(eq(emailLogs.id, id));
+    // Only record the first open (don't double-count re-opens)
+    const log = await db.query.emailLogs.findFirst({ where: eq(emailLogs.id, id) });
+    if (log && log.status !== "opened") {
+      await db
+        .update(emailLogs)
+        .set({ status: "opened", openedAt: new Date() })
+        .where(eq(emailLogs.id, id));
+      // Increment the campaign's opened counter
+      await db
+        .update(campaigns)
+        .set({ openedCount: sql`${campaigns.openedCount} + 1` })
+        .where(eq(campaigns.id, log.campaignId));
+    }
   }
 
   return new NextResponse(PIXEL, {

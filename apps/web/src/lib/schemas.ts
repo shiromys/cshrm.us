@@ -61,7 +61,7 @@ export const campaignSchema = z.object({
   name: z.string().min(1, "Campaign name is required"),
   subject: z.string().min(1, "Subject line is required"),
   bodyHtml: z.string().min(1, "Email body is required"),
-  bodyText: z.string().min(1, "Plain text body is required"),
+  bodyText: z.string().optional().default(""),   // auto-derived from HTML if blank
   targetType: z.enum(["employer", "candidate", "hotlist"]),
   hotlistId: z.string().uuid().optional(),
   targetFilters: z.record(z.unknown()).optional(),

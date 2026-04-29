@@ -31,9 +31,24 @@ export async function POST(request: NextRequest) {
   const parsed = campaignSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  const data = parsed.data;
+  // Auto-derive plain text from HTML when not provided
+  if (!data.bodyText) {
+    data.bodyText = data.bodyHtml
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .trim();
+  }
+
   const [campaign] = await db.insert(campaigns).values({
     userId: user.id,
-    ...parsed.data,
+    ...data,
   }).returning();
 
   return NextResponse.json(campaign, { status: 201 });

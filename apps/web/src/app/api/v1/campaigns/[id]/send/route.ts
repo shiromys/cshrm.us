@@ -134,7 +134,7 @@ export async function POST(
         const { ahasend } = await import("@/lib/email/ahasend");
         const messages = logRecords.map((r) => {
           const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
-          const trackingPixel = `<img src="${buildOpenTrackingPixel(r.logId, r.email)}" width="1" height="1" alt="" />`;
+          const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
           return {
             to: r.email, toName: r.name, fromName, replyTo: replyToEmail,
             subject: campaign.subject,
@@ -161,7 +161,7 @@ export async function POST(
         const { resend } = await import("@/lib/email/resend");
         await resend.sendBatch(logRecords.map((r) => {
           const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
-          const trackingPixel = `<img src="${buildOpenTrackingPixel(r.logId, r.email)}" width="1" height="1" alt="" />`;
+          const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
           return {
             to: r.email, subject: campaign.subject,
             html: campaign.bodyHtml + unsubLink + trackingPixel,
