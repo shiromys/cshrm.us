@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CsHrmLogo } from "@/components/cshrm-logo";
 
 export function PublicFooter() {
   return (
@@ -8,7 +9,7 @@ export function PublicFooter() {
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 font-bold text-xl mb-4">
-              <img src="/logo.png" alt="CloudSourceHRM" width={36} height={36} className="rounded-lg shrink-0" />
+              <CsHrmLogo size={36} />
               <span className="text-white">CloudSource</span>
               <span className="text-pub-400">HRM</span>
             </Link>

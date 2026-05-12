@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Mail, List, Briefcase,
   Settings, ShieldCheck, LogOut
 } from "lucide-react";
+import { CsHrmLogo } from "@/components/cshrm-logo";
 import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -31,7 +32,7 @@ export function AppSidebar() {
       {/* Logo */}
       <div className="p-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="CloudSourceHRM" width={40} height={40} className="rounded-lg shrink-0" />
+          <CsHrmLogo size={40} className="rounded-lg shrink-0" />
           <div className="min-w-0">
             <p className="font-bold text-sm leading-tight">CloudSourceHRM</p>
             <p className="text-xs text-blue-200 truncate">{session?.user?.email}</p>
