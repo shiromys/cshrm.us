@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy init — avoids "Missing API key" error during Next.js build-time static analysis
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY ?? "");
+  return _resend;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us";
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: `CloudSourceHRM <${fromAddress}>`,
       to: "info@cloudsourcehrm.us",
       replyTo: email,
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Auto-reply to sender
-    await resend.emails.send({
+    await getResend().emails.send({
       from: `CloudSourceHRM <${fromAddress}>`,
       to: email,
       subject: "We received your message — CloudSourceHRM",
