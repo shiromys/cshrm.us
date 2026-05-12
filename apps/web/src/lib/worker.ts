@@ -26,7 +26,7 @@ async function sendEmail(job: CampaignEmailJob): Promise<{ provider: string }> {
   if (hasResend) {
     const { resendClient } = await import("@/lib/email/resend");
     await resendClient.emails.send({
-      from: `${job.fromName} <${process.env.EMAIL_FROM_ADDRESS ?? "noreply@mail.cloudsourcehrm.us"}>`,
+      from: `${job.fromName} <${process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us"}>`,
       to: job.recipientEmail,
       subject: job.subject,
       html: job.bodyHtml,

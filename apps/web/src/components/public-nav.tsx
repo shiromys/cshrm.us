@@ -23,6 +23,7 @@ export function PublicNav() {
           <Link href="/#features" className="hover:text-pub-600 transition-colors">Features</Link>
           <Link href="/pricing" className="hover:text-pub-600 transition-colors">Pricing</Link>
           <Link href="https://www.cloudsourcehrm.com" target="_blank" className="hover:text-pub-600 transition-colors">CHRM NEXUS</Link>
+          <Link href="/contact" className="hover:text-pub-600 transition-colors">Contact</Link>
         </div>
 
         {/* CTAs */}
@@ -47,6 +48,7 @@ export function PublicNav() {
           <Link href="/#features" onClick={() => setOpen(false)} className="text-slate-700 hover:text-pub-600">Features</Link>
           <Link href="/pricing" onClick={() => setOpen(false)} className="text-slate-700 hover:text-pub-600">Pricing</Link>
           <Link href="https://www.cloudsourcehrm.com" target="_blank" className="text-slate-700 hover:text-pub-600">CHRM NEXUS</Link>
+          <Link href="/contact" onClick={() => setOpen(false)} className="text-slate-700 hover:text-pub-600">Contact</Link>
           <hr className="border-slate-100" />
           <Link href="/login" onClick={() => setOpen(false)} className="text-slate-700 hover:text-pub-600">Sign in</Link>
           <Link href="/register" onClick={() => setOpen(false)} className="bg-pub-600 text-white text-center py-2.5 rounded-lg hover:bg-pub-700">Get started free</Link>

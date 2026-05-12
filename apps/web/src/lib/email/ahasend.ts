@@ -1,6 +1,7 @@
 const AHASEND_API_URL = process.env.AHASEND_API_URL ?? "https://api.ahasend.com";
 const AHASEND_API_KEY = process.env.AHASEND_API_KEY ?? "";
-const FROM = process.env.EMAIL_FROM_ADDRESS ?? "noreply@mail.cloudsourcehrm.us";
+// Prefer a dedicated AhaSend from-address; fall back to the shared transactional address
+const FROM = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us";
 
 export interface AhaSendMessage {
   to: string;

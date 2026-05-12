@@ -32,6 +32,7 @@ export function PublicFooter() {
               <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
               <li><Link href="/register" className="hover:text-white transition-colors">Get started</Link></li>
               <li><Link href="/login" className="hover:text-white transition-colors">Sign in</Link></li>
+              <li><Link href="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
             </ul>
           </div>
 
@@ -62,7 +63,9 @@ export function PublicFooter() {
           <p>© {new Date().getFullYear()} SHIRO Technologies LLC. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link>
+            <Link href="/refund" className="hover:text-white transition-colors">Refund Policy</Link>
+            <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
           </div>
         </div>
       </div>

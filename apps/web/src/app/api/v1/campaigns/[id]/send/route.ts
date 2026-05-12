@@ -95,13 +95,19 @@ export async function POST(
       DO UPDATE SET count = usage_counters.count + 1, updated_at = now()
     `);
 
-    const fromName = `${userRecord.name} via CloudSourceHRM`;
-    const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
-    const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? "noreply@mail.cloudsourcehrm.us";
-
-    // Determine email provider
+    // Determine email provider first — needed to pick the correct from address
     const hasAhaSend = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
     const hasResend = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
+
+    const fromName = `${userRecord.name} via CloudSourceHRM`;
+    // Reply-To is the recruiter's own address so recipient replies land in their inbox.
+    // The From address (info@cloudsourcehrm.us) never receives replies — email clients
+    // always honour Reply-To over From when the recipient hits Reply.
+    const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
+    // AhaSend campaigns go from info@cloudsourcehrm.us; transactional Resend uses no-reply@
+    const fromAddress = hasAhaSend
+      ? (process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us")
+      : (process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us");
 
     if (!hasAhaSend && !hasResend) {
       await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));

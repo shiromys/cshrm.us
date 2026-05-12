@@ -7,7 +7,7 @@ function getClient(): ResendSDK {
   return _client;
 }
 
-const FROM = process.env.EMAIL_FROM_ADDRESS ?? "noreply@mail.cloudsourcehrm.us";
+const FROM = process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us";
 const FROM_NAME = "CloudSourceHRM";
 
 export const resend = {
