@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       return undefined;
     };
 
-    const toInsert: NewContact[] = rows
+    const toInsert = rows
       .map((row) => ({
         email: get(row, "email", "Email", "EMAIL", "e-mail"),
         name:  get(row, "name", "Name", "NAME", "full_name", "Full Name"),
@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
         contactType: contactType as "employer" | "candidate",
         source: "csv_import" as const,
       }))
-      .filter((r): r is NewContact => !!(r.email && r.name));
+      .filter((r) => !!(r.email && r.name))
+      .map((r) => ({ ...r, email: r.email as string, name: r.name as string })) as NewContact[];
 
     if (toInsert.length === 0) {
       return NextResponse.json(
