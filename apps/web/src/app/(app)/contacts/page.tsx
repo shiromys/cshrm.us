@@ -24,7 +24,7 @@ interface Contact {
   createdAt: string;
 }
 
-const EMPTY_FORM = { name: "", email: "", contactType: "employer" as "employer" | "candidate", companyName: "", title: "", phone: "", city: "", state: "" };
+const EMPTY_FORM = { name: "", email: "", contactType: "employer" as "employer" | "candidate", companyName: "", title: "", phone: "", city: "", state: "", industry: "" };
 
 export default function ContactsPage() {
   const [search, setSearch]         = useState("");
@@ -160,6 +160,7 @@ export default function ContactsPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddContact} className="grid grid-cols-2 gap-4">
+
               {/* Contact type selector */}
               <div className="col-span-2 space-y-1">
                 <label className="text-sm font-medium">Contact Type <span className="text-red-500">*</span></label>
@@ -184,33 +185,72 @@ export default function ContactsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Common fields */}
               <div className="col-span-2 space-y-1">
                 <label className="text-sm font-medium">Full Name <span className="text-red-500">*</span></label>
-                <Input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <Input required placeholder={form.contactType === "employer" ? "e.g. Sarah Mitchell" : "e.g. James Carter"} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="col-span-2 space-y-1">
                 <label className="text-sm font-medium">Email <span className="text-red-500">*</span></label>
-                <Input type="email" required value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+                <Input type="email" required placeholder={form.contactType === "employer" ? "e.g. sarah@acmecorp.com" : "e.g. james.carter@gmail.com"} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Company</label>
-                <Input value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Title / Role</label>
-                <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">City</label>
-                <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">State / Province</label>
-                <Input value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
-              </div>
+
+              {/* ── EMPLOYER fields ── */}
+              {form.contactType === "employer" && (<>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-sm font-medium">Company / Organisation <span className="text-red-500">*</span></label>
+                  <Input required placeholder="e.g. Acme Corp" value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Job Title / Role</label>
+                  <Input placeholder="e.g. HR Manager" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Phone</label>
+                  <Input type="tel" placeholder="e.g. +1 555 000 1234" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">City</label>
+                  <Input placeholder="e.g. Chicago" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">State / Province</label>
+                  <Input placeholder="e.g. Illinois" value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+                </div>
+              </>)}
+
+              {/* ── CANDIDATE fields ── */}
+              {form.contactType === "candidate" && (<>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Current Job Title</label>
+                  <Input placeholder="e.g. Senior Software Engineer" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Current Employer</label>
+                  <Input placeholder="e.g. Acme Corp (leave blank if unemployed)" value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Phone</label>
+                  <Input type="tel" placeholder="e.g. +1 555 000 1234" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Industry / Field</label>
+                  <Input placeholder="e.g. Information Technology" value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">City</label>
+                  <Input placeholder="e.g. Austin" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">State / Province</label>
+                  <Input placeholder="e.g. Texas" value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+                </div>
+              </>)}
+
               <div className="col-span-2 flex gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => { setShowAddForm(false); setForm(EMPTY_FORM); }}>Cancel</Button>
-                <Button type="submit" disabled={saving}>{saving ? "Adding…" : "Add Contact"}</Button>
+                <Button type="submit" disabled={saving}>{saving ? "Adding…" : `Add ${form.contactType === "employer" ? "Employer" : "Candidate"}`}</Button>
               </div>
             </form>
           </CardContent>
