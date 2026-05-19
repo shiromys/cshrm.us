@@ -47,8 +47,8 @@ async function sendOne(message: AhaSendMessage): Promise<void> {
       from: { email: FROM, name: message.fromName },
       recipients: [{ email: message.to, name: message.toName ?? message.to }],
       subject: message.subject,
-      html_body: message.html,
-      text_body: message.text,
+      html_content: message.html,
+      text_content: message.text,
       ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
     };
   } else {
