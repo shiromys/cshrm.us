@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "@/lib/auth-client";
+import { useSession, authClient } from "@/lib/auth-client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, CreditCard, Zap } from "lucide-react";
+import { CheckCircle2, CreditCard, Zap, User, Lock, Mail } from "lucide-react";
 
 // Isolated component so useSearchParams is inside a Suspense boundary (required by Next.js 15)
 function PaymentVerifier() {
@@ -62,30 +62,81 @@ function PaymentVerifier() {
 export default function SettingsPage() {
   const { data: session } = useSession();
   const user = session?.user as unknown as Record<string, string> | undefined;
-  const [replyTo, setReplyTo] = useState(user?.replyToEmail ?? "");
-  const [saving, setSaving] = useState(false);
 
-  async function saveReplyTo() {
-    setSaving(true);
+  // ── Profile state
+  const [name, setName]            = useState("");
+  const [companyName, setCompany]  = useState("");
+  const [replyTo, setReplyTo]      = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // ── Password state
+  const [currentPw, setCurrentPw]  = useState("");
+  const [newPw, setNewPw]          = useState("");
+  const [confirmPw, setConfirmPw]  = useState("");
+  const [savingPw, setSavingPw]    = useState(false);
+
+  // Populate form once session loads
+  useEffect(() => {
+    if (user) {
+      setName(user.name ?? "");
+      setCompany(user.companyName ?? "");
+      setReplyTo(user.replyToEmail ?? "");
+    }
+  }, [user?.name, user?.companyName, user?.replyToEmail]);
+
+  // ── Save profile (name, company, reply-to)
+  async function saveProfile() {
+    setSavingProfile(true);
     const res = await fetch("/api/v1/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ replyToEmail: replyTo }),
+      body: JSON.stringify({ name, companyName, replyToEmail: replyTo }),
     });
-    setSaving(false);
-    if (res.ok) toast.success("Reply-To email saved");
-    else toast.error("Failed to save");
+    setSavingProfile(false);
+    if (res.ok) toast.success("Profile updated.");
+    else toast.error("Failed to save profile.");
   }
 
+  // ── Change password
+  async function changePassword() {
+    if (!currentPw || !newPw || !confirmPw) {
+      toast.error("Please fill in all password fields.");
+      return;
+    }
+    if (newPw.length < 8) {
+      toast.error("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    setSavingPw(true);
+    try {
+      const result = await authClient.changePassword({
+        currentPassword: currentPw,
+        newPassword: newPw,
+        revokeOtherSessions: false,
+      });
+      if (result.error) throw new Error(result.error.message ?? "Failed to change password.");
+      toast.success("Password changed successfully.");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password.");
+    } finally {
+      setSavingPw(false);
+    }
+  }
+
+  // ── Stripe
   async function startUpgrade() {
     try {
       const res = await fetch("/api/v1/stripe/checkout", { method: "POST" });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error(data.error ?? "Failed to start checkout. Please try again.");
-      }
+      if (data.url) window.location.href = data.url;
+      else toast.error(data.error ?? "Failed to start checkout. Please try again.");
     } catch {
       toast.error("Checkout failed. Please try again.");
     }
@@ -103,43 +154,132 @@ export default function SettingsPage() {
   }
 
   const tier = user?.tier ?? "free";
-  const chrmnexusSubscribed = user?.chrmnexusSubscribed === "true" || (user as Record<string, unknown>)?.chrmnexusSubscribed === true;
+  const chrmnexusSubscribed = user?.chrmnexusSubscribed === "true" || (user as Record<string, unknown> | undefined)?.chrmnexusSubscribed === true;
 
   return (
-    <div className="p-8 max-w-3xl">
-      {/* Suspense required by Next.js 15 for useSearchParams */}
-      <Suspense fallback={null}>
-        <PaymentVerifier />
-      </Suspense>
+    <div className="p-8 max-w-3xl space-y-6">
+      <Suspense fallback={null}><PaymentVerifier /></Suspense>
 
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold">Settings</h1>
 
-      {/* Account Info */}
-      <Card className="mb-6">
-        <CardHeader><CardTitle>Account</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
+      {/* ── Profile ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><User className="w-5 h-5" />Profile</CardTitle>
+          <CardDescription>Update your display name and company information</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b">
             <div>
-              <p className="font-medium">{user?.name}</p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm font-medium text-muted-foreground">Account email</p>
+              <p className="font-medium">{user?.email}</p>
             </div>
             <Badge variant={tier === "standard" ? "success" : "outline"}>
               {tier === "standard" ? "Standard" : "Free"}
             </Badge>
           </div>
-          <div className="space-y-2">
-            <Label>Reply-To Email</Label>
-            <p className="text-xs text-muted-foreground">Campaign and hotlist replies are sent to this address</p>
-            <div className="flex gap-2">
-              <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder={user?.email} className="flex-1" />
-              <Button onClick={saveReplyTo} disabled={saving} variant="outline">Save</Button>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Display Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your full name"
+              />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="company">Company Name</Label>
+              <Input
+                id="company"
+                value={companyName}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="Your company or agency"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="replyTo" className="flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" /> Campaign Reply-To Email
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              When recipients reply to your campaigns, replies go to this address. Defaults to your account email if left blank.
+            </p>
+            <Input
+              id="replyTo"
+              type="email"
+              value={replyTo}
+              onChange={(e) => setReplyTo(e.target.value)}
+              placeholder={user?.email}
+            />
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <Button onClick={saveProfile} disabled={savingProfile}>
+              {savingProfile ? "Saving…" : "Save Profile"}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Subscription */}
-      <Card className="mb-6" id="upgrade">
+      {/* ── Security / Change Password ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Lock className="w-5 h-5" />Security</CardTitle>
+          <CardDescription>Change your account password</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="currentPw">Current Password</Label>
+            <Input
+              id="currentPw"
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              placeholder="Enter your current password"
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="newPw">New Password</Label>
+              <Input
+                id="newPw"
+                type="password"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPw">Confirm New Password</Label>
+              <Input
+                id="confirmPw"
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="Repeat new password"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Forgot your password? Sign out and use the{" "}
+            <a href="/forgot-password" className="text-primary hover:underline">Forgot Password</a> link on the login page.
+          </p>
+          <div className="flex justify-end pt-1">
+            <Button onClick={changePassword} disabled={savingPw} variant="outline">
+              {savingPw ? "Updating…" : "Update Password"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Subscription ── */}
+      <Card id="upgrade">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5" />Subscription</CardTitle>
           <CardDescription>Manage your CloudSourceHRM subscription</CardDescription>
@@ -159,7 +299,7 @@ export default function SettingsPage() {
               <div className="p-4 border rounded-lg space-y-2">
                 <p className="font-semibold">Standard Plan — $95/month</p>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>✓ Unlimited campaigns & hotlists</li>
+                  <li>✓ Unlimited campaigns &amp; hotlists</li>
                   <li>✓ 10 emails/day (configurable)</li>
                   <li>✓ Private employer contacts database</li>
                   <li>✓ CSV import</li>
@@ -172,7 +312,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* CHRMNEXUS Add-On */}
+      {/* ── CHRMNEXUS Add-On ── */}
       <Card id="chrmnexus">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Zap className="w-5 h-5 text-amber-500" />CHRMNEXUS Job Board</CardTitle>
@@ -197,7 +337,9 @@ export default function SettingsPage() {
                   <li>✓ Track application status</li>
                   <li>✓ Save jobs for later</li>
                 </ul>
-                <Button variant="outline" className="w-full mt-3" onClick={subscribeChrmnexus}>Add CHRMNEXUS Apply Access</Button>
+                <Button variant="outline" className="w-full mt-3" onClick={subscribeChrmnexus}>
+                  Add CHRMNEXUS Apply Access
+                </Button>
               </div>
             </div>
           )}
