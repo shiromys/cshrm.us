@@ -130,6 +130,28 @@ export async function POST(
       logRecords.push({ logId: log.id, email: r.email, name: r.name });
     }
 
+    // ── Personalisation helper ──────────────────────────────────────────────
+    // Replaces tokens in subject, HTML body, and plain-text body per recipient.
+    // Supported tokens:
+    //   {{name}}       → recipient's full name      e.g. "James Carter"
+    //   {{first_name}} → first word of their name   e.g. "James"
+    //   {{email}}      → recipient's email address
+    //   {{company}}    → recipient's company name (empty string if unknown)
+    function personalise(template: string, r: { name: string; email: string; companyName?: string | null }): string {
+      const firstName = r.name.split(" ")[0] ?? r.name;
+      return template
+        .replace(/\{\{name\}\}/gi,       r.name)
+        .replace(/\{\{first_name\}\}/gi, firstName)
+        .replace(/\{\{email\}\}/gi,      r.email)
+        .replace(/\{\{company\}\}/gi,    r.companyName ?? "");
+    }
+
+    // Enrich logRecords with company info for personalisation
+    const enriched = logRecords.map((r) => {
+      const contact = recipients.find((c) => c.email === r.email);
+      return { ...r, companyName: (contact as { companyName?: string | null } | undefined)?.companyName ?? null };
+    });
+
     // Send emails directly — no queue needed
     let sentCount = 0;
     let provider: "ahasend" | "resend" = hasAhaSend ? "ahasend" : "resend";
@@ -138,23 +160,26 @@ export async function POST(
     if (hasAhaSend) {
       try {
         const { ahasend } = await import("@/lib/email/ahasend");
-        const messages = logRecords.map((r) => {
+        const messages = enriched.map((r) => {
           const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
           const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
+          const personalisedHtml = personalise(campaign.bodyHtml, r);
+          const personalisedText = personalise(campaign.bodyText ?? "", r);
+          const personalisedSubject = personalise(campaign.subject, r);
           return {
             to: r.email, toName: r.name, fromName, replyTo: replyToEmail,
-            subject: campaign.subject,
-            html: campaign.bodyHtml + unsubLink + trackingPixel,
-            text: campaign.bodyText,
+            subject: personalisedSubject,
+            html: personalisedHtml + unsubLink + trackingPixel,
+            text: personalisedText,
             emailLogId: r.logId,
           };
         });
         await ahasend.sendBulk(messages);
         // Mark all as sent
-        for (const r of logRecords) {
+        for (const r of enriched) {
           await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" }).where(eq(emailLogs.id, r.logId));
         }
-        sentCount = logRecords.length;
+        sentCount = enriched.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[campaign/send] AhaSend failed, trying Resend:", msg);
@@ -165,19 +190,24 @@ export async function POST(
     if (sentCount === 0 && hasResend) {
       try {
         const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(logRecords.map((r) => {
+        await resend.sendBatch(enriched.map((r) => {
           const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
           const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
+          const personalisedHtml = personalise(campaign.bodyHtml, r);
+          const personalisedText = personalise(campaign.bodyText ?? "", r);
+          const personalisedSubject = personalise(campaign.subject, r);
           return {
-            to: r.email, subject: campaign.subject,
-            html: campaign.bodyHtml + unsubLink + trackingPixel,
-            text: campaign.bodyText, replyTo: replyToEmail,
+            to: r.email,
+            subject: personalisedSubject,
+            html: personalisedHtml + unsubLink + trackingPixel,
+            text: personalisedText,
+            replyTo: replyToEmail,
           };
         }));
-        for (const r of logRecords) {
+        for (const r of enriched) {
           await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
         }
-        sentCount = logRecords.length;
+        sentCount = enriched.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[campaign/send] Resend also failed:", msg);

@@ -9,8 +9,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { Users, Building2, List, Info, Plus, X } from "lucide-react";
 
 interface Hotlist { id: string; name: string; }
@@ -137,20 +137,16 @@ export default function NewCampaignPage() {
           <CardHeader>
             <CardTitle>Email Body</CardTitle>
             <CardDescription>
-              Write your email in HTML. Use <code className="text-xs bg-muted px-1 rounded">{"{{name}}"}</code> to personalise with the recipient's name.
+              Write your email using the toolbar above — bold, bullets, links and more. No HTML needed.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Textarea
-              {...register("bodyHtml")}
-              rows={10}
-              placeholder={"<p>Hi {{name}},</p>\n\n<p>We have a new Python Developer requirement in Dallas TX (C2C/W2, 6 months).</p>\n\n<p>Please reach out if you have matching profiles.</p>\n\n<p>Best,<br/>Akash</p>"}
-              className="font-mono text-sm"
+            <RichTextEditor
+              value={watch("bodyHtml") ?? ""}
+              onChange={(html) => setValue("bodyHtml", html, { shouldValidate: true })}
+              placeholder="Hi {{name}}, we have a new Java Developer requirement in Dallas TX (C2C/W2, 6 months). Please reach out if you have matching profiles. Best, Akash"
             />
-            {errors.bodyHtml && <p className="text-xs text-destructive">{errors.bodyHtml.message}</p>}
-            <p className="text-xs text-muted-foreground mt-2">
-              Plain text version is generated automatically from your HTML for email clients that don't support HTML.
-            </p>
+            {errors.bodyHtml && <p className="text-xs text-destructive mt-2">{errors.bodyHtml.message}</p>}
           </CardContent>
         </Card>
 
