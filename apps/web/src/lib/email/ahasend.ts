@@ -34,7 +34,8 @@ async function sendOne(message: AhaSendMessage): Promise<void> {
     // ── v2 API ────────────────────────────────────────────────────────────────
     // Endpoint: POST /v2/accounts/{account_id}/messages
     // Auth:     Authorization: Bearer <key>
-    // Payload:  flat — subject/html_body/text_body at top level
+    // Payload:  flat top-level fields — html_content / text_content / reply_to
+    // Source:   https://ahasend.com/docs/api-reference/v1/v1-vs-v2
     if (!AHASEND_ACCOUNT_ID) {
       throw new Error("AHASEND_ACCOUNT_ID env var is required when using a v2 API key (aha-sk-...)");
     }
