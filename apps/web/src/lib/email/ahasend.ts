@@ -13,46 +13,29 @@ export interface AhaSendMessage {
   text: string;
 }
 
-async function sendBulk(messages: AhaSendMessage[]) {
+/**
+ * Send a single email via AhaSend v1 API.
+ * Endpoint: POST /v1/email/send
+ * Payload uses `recipients[]` and nested `content` object.
+ */
+async function sendOne(message: AhaSendMessage): Promise<void> {
   const payload = {
-    messages: messages.map((m) => ({
-      from: { email: FROM, name: m.fromName },
-      to: [{ email: m.to, name: m.toName ?? m.to }],
-      reply_to: m.replyTo ? { email: m.replyTo } : undefined,
-      subject: m.subject,
-      html: m.html,
-      text: m.text,
-    })),
-  };
-
-  const res = await fetch(`${AHASEND_API_URL}/v1/email/send-bulk`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Api-Key": AHASEND_API_KEY,
+    from: {
+      email: FROM,
+      name: message.fromName,
     },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`AhaSend bulk send failed (${res.status}): ${body}`);
-  }
-
-  return res.json();
-}
-
-async function sendSingle(message: AhaSendMessage) {
-  const payload = {
-    from: { email: FROM, name: message.fromName },
-    to: [{ email: message.to, name: message.toName ?? message.to }],
-    reply_to: message.replyTo ? { email: message.replyTo } : undefined,
-    subject: message.subject,
-    html: message.html,
-    text: message.text,
+    recipients: [
+      { email: message.to, name: message.toName ?? message.to },
+    ],
+    content: {
+      subject: message.subject,
+      html_body: message.html,
+      text_body: message.text,
+      ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
+    },
   };
 
-  const res = await fetch(`${AHASEND_API_URL}/v1/email/send-message`, {
+  const res = await fetch(`${AHASEND_API_URL}/v1/email/send`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -65,8 +48,62 @@ async function sendSingle(message: AhaSendMessage) {
     const body = await res.text();
     throw new Error(`AhaSend send failed (${res.status}): ${body}`);
   }
-
-  return res.json();
 }
 
-export const ahasend = { sendBulk, sendSingle };
+/**
+ * Send personalised emails to multiple recipients.
+ *
+ * Since each email is individually personalised, we send one request per recipient.
+ * The strategy scales automatically based on list size:
+ *
+ *  ≤ 50  recipients → fire all simultaneously (fastest, safe at low volume)
+ *  51–500            → batches of 25 with 150ms pause between batches
+ *  > 500             → batches of 20 with 300ms pause between batches (steady, rate-limit safe)
+ *
+ * Partial failures are logged but don't abort the campaign.
+ * Throws only if every single send fails.
+ */
+async function sendBulk(messages: AhaSendMessage[]): Promise<{ sent: number; failed: number }> {
+  const total = messages.length;
+
+  // Pick strategy based on list size
+  const BATCH_SIZE  = total <= 50 ? total : total <= 500 ? 25 : 20;
+  const PAUSE_MS    = total <= 50 ? 0     : total <= 500 ? 150 : 300;
+
+  let sent = 0;
+  let failed = 0;
+  const firstError: string[] = [];
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    const batch = messages.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map((m) => sendOne(m)));
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        sent++;
+      } else {
+        failed++;
+        if (firstError.length === 0) {
+          firstError.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+        }
+        console.error("[ahasend] Failed to send:", result.reason);
+      }
+    }
+
+    // Pause between batches (skip after the last one)
+    if (PAUSE_MS > 0 && i + BATCH_SIZE < total) {
+      await sleep(PAUSE_MS);
+    }
+  }
+
+  // Only throw if everything failed
+  if (sent === 0 && failed > 0) {
+    throw new Error(`All AhaSend sends failed. First error: ${firstError[0] ?? "unknown"}`);
+  }
+
+  return { sent, failed };
+}
+
+export const ahasend = { sendBulk, sendSingle: sendOne };
