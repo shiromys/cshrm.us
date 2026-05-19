@@ -49,7 +49,7 @@ async function sendOne(message: AhaSendMessage): Promise<void> {
       subject: message.subject,
       html_body: message.html,
       text_body: message.text,
-      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+      ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
     };
   } else {
     // ── v1 API ────────────────────────────────────────────────────────────────
