@@ -1,7 +1,12 @@
-const AHASEND_API_URL = process.env.AHASEND_API_URL ?? "https://api.ahasend.com";
-const AHASEND_API_KEY = process.env.AHASEND_API_KEY ?? "";
+const AHASEND_API_URL   = process.env.AHASEND_API_URL    ?? "https://api.ahasend.com";
+const AHASEND_API_KEY   = process.env.AHASEND_API_KEY    ?? "";
+const AHASEND_ACCOUNT_ID = process.env.AHASEND_ACCOUNT_ID ?? "";
+
 // Prefer a dedicated AhaSend from-address; fall back to the shared transactional address
 const FROM = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us";
+
+// v2 keys are prefixed with "aha-sk-"; v1 keys are plain hex strings
+const IS_V2 = AHASEND_API_KEY.startsWith("aha-sk-");
 
 export interface AhaSendMessage {
   to: string;
@@ -14,33 +19,63 @@ export interface AhaSendMessage {
 }
 
 /**
- * Send a single email via AhaSend v1 API.
- * Endpoint: POST /v1/email/send
- * Payload uses `recipients[]` and nested `content` object.
+ * Send a single email via AhaSend.
+ *
+ * Automatically selects the correct API version based on the key prefix:
+ *   v1 key (plain hex)  → POST /v1/email/send          header: X-Api-Key
+ *   v2 key (aha-sk-...) → POST /v2/accounts/{id}/messages  header: Authorization: Bearer
  */
 async function sendOne(message: AhaSendMessage): Promise<void> {
-  const payload = {
-    from: {
-      email: FROM,
-      name: message.fromName,
-    },
-    recipients: [
-      { email: message.to, name: message.toName ?? message.to },
-    ],
-    content: {
+  let url: string;
+  let headers: Record<string, string>;
+  let payload: Record<string, unknown>;
+
+  if (IS_V2) {
+    // ── v2 API ────────────────────────────────────────────────────────────────
+    // Endpoint: POST /v2/accounts/{account_id}/messages
+    // Auth:     Authorization: Bearer <key>
+    // Payload:  flat — subject/html_body/text_body at top level
+    if (!AHASEND_ACCOUNT_ID) {
+      throw new Error("AHASEND_ACCOUNT_ID env var is required when using a v2 API key (aha-sk-...)");
+    }
+    url = `${AHASEND_API_URL}/v2/accounts/${AHASEND_ACCOUNT_ID}/messages`;
+    headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${AHASEND_API_KEY}`,
+    };
+    payload = {
+      from: { email: FROM, name: message.fromName },
+      recipients: [{ email: message.to, name: message.toName ?? message.to }],
       subject: message.subject,
       html_body: message.html,
       text_body: message.text,
-      ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
-    },
-  };
-
-  const res = await fetch(`${AHASEND_API_URL}/v1/email/send`, {
-    method: "POST",
-    headers: {
+      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+    };
+  } else {
+    // ── v1 API ────────────────────────────────────────────────────────────────
+    // Endpoint: POST /v1/email/send
+    // Auth:     X-Api-Key: <key>
+    // Payload:  content object wraps subject/body/reply_to
+    url = `${AHASEND_API_URL}/v1/email/send`;
+    headers = {
       "Content-Type": "application/json",
       "X-Api-Key": AHASEND_API_KEY,
-    },
+    };
+    payload = {
+      from: { email: FROM, name: message.fromName },
+      recipients: [{ email: message.to, name: message.toName ?? message.to }],
+      content: {
+        subject: message.subject,
+        html_body: message.html,
+        text_body: message.text,
+        ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
+      },
+    };
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
     body: JSON.stringify(payload),
   });
 
