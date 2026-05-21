@@ -4,7 +4,7 @@ export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-20">
       <h1 className="text-3xl font-bold text-slate-900 mb-2">Privacy Policy</h1>
-      <p className="text-sm text-slate-500 mb-10">Last updated: May 12, 2025</p>
+      <p className="text-sm text-slate-500 mb-10">Last updated: May 21, 2026</p>
 
       <div className="prose prose-slate max-w-none space-y-8 text-slate-700 leading-relaxed">
 
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
           <p>
             CloudSourceHRM is a recruiter member portal operated by <strong>SHIRO Technologies LLC</strong>
             (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;). We are part of the CHRM NEXUS ecosystem and provide
-            tools for recruiters to manage contacts, run email campaigns, and build candidate hotlists.
+            tools for recruiters to manage contacts, send requirements, and build candidate hotlists.
           </p>
           <p className="mt-2">
             Our registered address is on file with the state of our incorporation. For privacy-related inquiries,
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
             <li><strong>Account information:</strong> Your name, email address, and password when you register.</li>
             <li><strong>Profile and billing:</strong> Subscription tier, payment method details (processed by Stripe — we never store raw card numbers), and billing address.</li>
             <li><strong>Contact data you upload:</strong> CSV or Excel files of employer/candidate contacts you import into the platform. This data is stored on your behalf.</li>
-            <li><strong>Campaign data:</strong> Email subjects, body content, recipient lists, and engagement metrics (opens, delivery status).</li>
+            <li><strong>Requirement data:</strong> Email subjects, body content, recipient lists, and engagement metrics (opens, delivery status).</li>
             <li><strong>Usage data:</strong> Pages visited, features used, timestamps, and browser/device information collected via standard server logs and analytics.</li>
             <li><strong>Communications:</strong> Messages you send us via the contact form or email.</li>
           </ul>
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
             <li>To provide, maintain, and improve the CloudSourceHRM platform.</li>
             <li>To process payments and manage your subscription.</li>
             <li>To send transactional emails (account confirmations, password resets, billing receipts).</li>
-            <li>To deliver the email campaigns you create within the platform.</li>
+            <li>To deliver the requirements you create within the platform.</li>
             <li>To respond to your support requests.</li>
             <li>To detect fraud, abuse, or security incidents.</li>
             <li>To comply with legal obligations.</li>

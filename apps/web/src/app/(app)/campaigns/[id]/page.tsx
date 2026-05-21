@@ -76,7 +76,7 @@ export default function CampaignDetailPage() {
       return json;
     },
     onSuccess: (data) => {
-      toast.success(`Campaign sending to ${data.recipients} recipients.`);
+      toast.success(`Requirement sending to ${data.recipients} recipients.`);
       qc.invalidateQueries({ queryKey: ["campaign", id] });
     },
     onError: (err: any) => toast.error(err.message),
@@ -88,10 +88,10 @@ export default function CampaignDetailPage() {
       if (!res.ok) throw new Error("Failed to pause");
     },
     onSuccess: () => {
-      toast.success("Campaign paused");
+      toast.success("Requirement paused");
       qc.invalidateQueries({ queryKey: ["campaign", id] });
     },
-    onError: () => toast.error("Failed to pause campaign"),
+    onError: () => toast.error("Failed to pause requirement"),
   });
 
   if (isLoading) {
@@ -106,7 +106,7 @@ export default function CampaignDetailPage() {
   }
 
   if (!campaign) {
-    return <div className="p-6 text-gray-500">Campaign not found.</div>;
+    return <div className="p-6 text-gray-500">Requirement not found.</div>;
   }
 
   const logs = logsData?.logs ?? [];
@@ -124,7 +124,7 @@ export default function CampaignDetailPage() {
       <Button variant="ghost" size="sm" asChild>
         <Link href="/campaigns">
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Campaigns
+          Requirements
         </Link>
       </Button>
 
@@ -145,7 +145,7 @@ export default function CampaignDetailPage() {
           {campaign.status === "draft" && (
             <Button onClick={() => sendMutation.mutate()} disabled={sendMutation.isPending}>
               <Send className="h-4 w-4 mr-1" />
-              {sendMutation.isPending ? "Sending…" : "Send Campaign"}
+              {sendMutation.isPending ? "Sending…" : "Send Requirement"}
             </Button>
           )}
           {campaign.status === "sending" && (

@@ -149,7 +149,7 @@ export function RichTextEditor({
 
       {/* Hint */}
       <div className="px-3 py-1.5 border-t border-border bg-muted/20 text-xs text-muted-foreground">
-        Tokens are replaced individually per recipient when the campaign is sent —{" "}
+        Tokens are replaced individually per recipient when the requirement is sent —{" "}
         <span className="font-mono bg-muted px-1 rounded">{"{{first_name}}"}</span>{" "}
         <span className="font-mono bg-muted px-1 rounded">{"{{name}}"}</span>{" "}
         <span className="font-mono bg-muted px-1 rounded">{"{{company}}"}</span>{" "}

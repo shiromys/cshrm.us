@@ -4,7 +4,7 @@ export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-20">
       <h1 className="text-3xl font-bold text-slate-900 mb-2">Terms of Use</h1>
-      <p className="text-sm text-slate-500 mb-10">Last updated: May 12, 2025</p>
+      <p className="text-sm text-slate-500 mb-10">Last updated: May 21, 2026</p>
 
       <div className="space-y-8 text-slate-700 leading-relaxed">
 
@@ -22,7 +22,7 @@ export default function TermsPage() {
           <h2 className="text-xl font-semibold text-slate-900 mb-3">2. Description of Service</h2>
           <p>
             CloudSourceHRM is a recruiter member portal that provides tools for managing professional
-            contacts, running email campaigns, building candidate hotlists, and accessing the CHRM NEXUS
+            contacts, sending requirements, building candidate hotlists, and accessing the CHRM NEXUS
             ecosystem. The Service is intended for professional use by recruiters, staffing agencies,
             and HR professionals.
           </p>
@@ -91,7 +91,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-xl font-semibold text-slate-900 mb-3">7. Email Compliance</h2>
           <p>
-            You are solely responsible for ensuring that all email campaigns sent through the Service
+            You are solely responsible for ensuring that all requirements sent through the Service
             comply with applicable email marketing laws, including but not limited to the U.S. CAN-SPAM Act,
             Canada&apos;s CASL, and the EU&apos;s GDPR. This includes maintaining proper opt-in consent records,
             honoring unsubscribe requests promptly, and including a valid physical address in commercial emails.
@@ -101,7 +101,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-xl font-semibold text-slate-900 mb-3">8. Your Data</h2>
           <p>
-            You retain ownership of all contact data and campaign content you upload or create in the
+            You retain ownership of all contact data and requirement content you upload or create in the
             Service. You grant us a limited license to store and process that data solely to provide
             the Service to you. We will not use your data for our own marketing or share it with
             third parties beyond what is described in our Privacy Policy.

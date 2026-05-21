@@ -17,7 +17,7 @@ export default function CampaignsPage() {
     queryKey: ["campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/v1/campaigns");
-      if (!res.ok) throw new Error("Failed to load campaigns");
+      if (!res.ok) throw new Error("Failed to load requirements");
       return res.json();
     },
   });
@@ -26,29 +26,29 @@ export default function CampaignsPage() {
     const res = await fetch(`/api/v1/campaigns/${id}/send`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) {
-      toast.error(data.error ?? "Failed to send campaign");
+      toast.error(data.error ?? "Failed to send requirement");
       return;
     }
-    toast.success(`Campaign launched — ${data.recipients} recipients queued`);
+    toast.success(`Requirement launched — ${data.recipients} recipients queued`);
     refetch();
   }
 
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Campaigns</h1>
+        <h1 className="text-2xl font-bold">Requirements</h1>
         <Link href="/campaigns/new">
-          <Button><PlusCircle className="w-4 h-4 mr-2" />New Campaign</Button>
+          <Button><PlusCircle className="w-4 h-4 mr-2" />New Requirement</Button>
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading campaigns...</div>
+        <div className="text-center py-12 text-muted-foreground">Loading requirements...</div>
       ) : campaigns.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No campaigns yet. Create your first one.</p>
-            <Link href="/campaigns/new"><Button>Create Campaign</Button></Link>
+            <p className="text-muted-foreground mb-4">No requirements yet. Create your first one.</p>
+            <Link href="/campaigns/new"><Button>Create Requirement</Button></Link>
           </CardContent>
         </Card>
       ) : (
