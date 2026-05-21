@@ -27,7 +27,10 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       if (!process.env.RESEND_API_KEY) return;
       const { resend } = await import("@/lib/email/resend");
-      await resend.sendEmailVerification(user.email, user.name, url);
+      // Append callbackURL so the verification button lands the user on /login directly
+      const verificationUrl = new URL(url);
+      verificationUrl.searchParams.set("callbackURL", "/login");
+      await resend.sendEmailVerification(user.email, user.name, verificationUrl.toString());
     },
   },
   secret: process.env.BETTER_AUTH_SECRET ?? "build-time-placeholder-secret-do-not-use",

@@ -42,7 +42,25 @@ export async function POST(request: NextRequest) {
       })
       .where(eq(users.id, session.user.id));
 
-    return NextResponse.json({ success: true, tier: "standard" });
+    // Bust the better-auth session cache cookies so the client immediately
+    // reads the updated tier from the DB instead of the stale 5-min cache.
+    const response = NextResponse.json({ success: true, tier: "standard" });
+    const expired = new Date(0);
+    response.cookies.set("better-auth.session_data", "", {
+      expires: expired,
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+    });
+    // Secure variant used in production (HTTPS)
+    response.cookies.set("__Secure-better-auth.session_data", "", {
+      expires: expired,
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+    });
+    return response;
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Verification failed";
     return NextResponse.json({ error: msg }, { status: 500 });

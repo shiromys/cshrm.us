@@ -24,7 +24,6 @@ export default function RegisterPage() {
       email: data.email,
       password: data.password,
       name: data.name,
-      fetchOptions: { onSuccess: () => router.push("/dashboard") },
     });
 
     if (result.error) {
@@ -32,8 +31,8 @@ export default function RegisterPage() {
       return;
     }
 
-    toast.success("Account created! Redirecting to dashboard...");
-    router.push("/dashboard");
+    // Redirect to the "check your inbox" page so the user knows to verify before logging in
+    router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
   }
 
   return (

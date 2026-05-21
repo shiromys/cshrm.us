@@ -9,17 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, CreditCard, Zap, User, Lock, Mail } from "lucide-react";
+import { CheckCircle2, CreditCard, Zap, User, Lock, Mail, ExternalLink, Receipt } from "lucide-react";
 
 // Isolated component so useSearchParams is inside a Suspense boundary (required by Next.js 15)
 function PaymentVerifier() {
   const searchParams = useSearchParams();
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
     if (!sessionId) return;
 
     if (searchParams.get("upgraded") === "1") {
+      setVerifying(true);
       fetch("/api/v1/stripe/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -29,15 +31,22 @@ function PaymentVerifier() {
         .then((data) => {
           if (data.success) {
             toast.success("🎉 Welcome to Standard! Your subscription is now active.");
+            // The verify route clears the session cache cookie — a hard reload
+            // will now fetch a fresh session reflecting the new tier immediately.
             window.location.replace("/settings");
           } else {
+            setVerifying(false);
             toast.error(data.error ?? "Could not verify payment. Please contact support.");
           }
         })
-        .catch(() => toast.error("Could not verify payment. Please contact support."));
+        .catch(() => {
+          setVerifying(false);
+          toast.error("Could not verify payment. Please contact support.");
+        });
     }
 
     if (searchParams.get("chrmnexus") === "1") {
+      setVerifying(true);
       fetch("/api/v1/chrmnexus/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,14 +58,28 @@ function PaymentVerifier() {
             toast.success("🎉 CHRMNEXUS Apply Access is now active!");
             window.location.replace("/settings");
           } else {
+            setVerifying(false);
             toast.error(data.error ?? "Could not verify CHRMNEXUS payment. Please contact support.");
           }
         })
-        .catch(() => toast.error("Could not verify payment. Please contact support."));
+        .catch(() => {
+          setVerifying(false);
+          toast.error("Could not verify payment. Please contact support.");
+        });
     }
   }, [searchParams]);
 
-  return null;
+  if (!verifying) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-lg font-semibold text-gray-800">Activating your subscription…</p>
+        <p className="text-sm text-muted-foreground">Please wait, this only takes a moment.</p>
+      </div>
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -139,6 +162,17 @@ export default function SettingsPage() {
       else toast.error(data.error ?? "Failed to start checkout. Please try again.");
     } catch {
       toast.error("Checkout failed. Please try again.");
+    }
+  }
+
+  async function openBillingPortal() {
+    try {
+      const res = await fetch("/api/v1/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else toast.error(data.error ?? "Could not open billing portal. Please try again.");
+    } catch {
+      toast.error("Could not open billing portal. Please try again.");
     }
   }
 
@@ -311,6 +345,26 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Billing & Invoices ── */}
+      {tier === "standard" && (
+        <Card id="billing">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Receipt className="w-5 h-5" />Billing &amp; Invoices</CardTitle>
+            <CardDescription>View past payments, download receipts, and manage your subscription</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Your full billing history, PDF invoices, and payment method are managed securely through Stripe.
+              Clicking below opens the Stripe billing portal — no card details are ever stored on our servers.
+            </p>
+            <Button variant="outline" onClick={openBillingPortal} className="gap-2">
+              <ExternalLink className="w-4 h-4" />
+              Open Billing Portal
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── CHRMNEXUS Add-On ── */}
       <Card id="chrmnexus">

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Link from "next/link";
-import { Search, Download, Plus, FileSpreadsheet, Building2, Users } from "lucide-react";
+import { Search, Download, Plus, FileSpreadsheet, Building2, Users, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
@@ -85,7 +85,7 @@ export default function ContactsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed");
-      toast.success("Contact added to platform");
+      toast.success("Contact added to the Global Directory");
       setForm(EMPTY_FORM);
       setShowAddForm(false);
       qc.invalidateQueries({ queryKey: ["contacts"] });
@@ -105,11 +105,24 @@ export default function ContactsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Info banner — always visible */}
+      <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+        <div className="space-y-1">
+          <p className="font-semibold">About the Global Contact Directory</p>
+          <p>
+            This is a <strong>platform-wide shared database</strong> of employers and candidates maintained by the admin.
+            Every recruiter on CloudSourceHRM can target these contacts in their campaigns — no one owns them individually.
+            Your private contacts (imported or added by you) live under <strong>My Contacts</strong> in the sidebar.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Platform Contacts</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Global Contact Directory</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {data?.total ?? 0} contacts in the shared database — visible to all users for campaigns
+            {data?.total ?? 0} shared contacts — available to all users for campaigns
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -156,7 +169,7 @@ export default function ContactsPage() {
       {isAdmin && showAddForm && (
         <Card>
           <CardHeader className="pb-2">
-            <h3 className="font-medium">Add Contact to Platform</h3>
+            <h3 className="font-medium">Add Contact to Global Directory</h3>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddContact} className="grid grid-cols-2 gap-4">
@@ -260,7 +273,7 @@ export default function ContactsPage() {
       {/* How to populate — shown only when empty */}
       {!isLoading && contacts.length === 0 && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-1">
-          <p className="font-semibold">Platform Contacts is empty</p>
+          <p className="font-semibold">Global Contact Directory is empty</p>
           <p>As admin, you can populate it two ways:</p>
           <ul className="list-disc ml-4 mt-1 space-y-0.5">
             <li><strong>Import CSV / Excel</strong> — select Employer or Candidate from the dropdown, then upload your file.</li>
