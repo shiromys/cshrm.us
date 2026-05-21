@@ -34,7 +34,17 @@ export async function POST(request: NextRequest) {
       })
       .where(eq(users.id, session.user.id));
 
-    return NextResponse.json({ success: true });
+    // Bust the better-auth session cache so chrmnexusSubscribed is reflected
+    // immediately on the next session fetch without waiting for the 5-min cache.
+    const response = NextResponse.json({ success: true });
+    const expired = new Date(0);
+    response.cookies.set("better-auth.session_data", "", {
+      expires: expired, path: "/", httpOnly: true, sameSite: "lax",
+    });
+    response.cookies.set("__Secure-better-auth.session_data", "", {
+      expires: expired, path: "/", httpOnly: true, sameSite: "lax", secure: true,
+    });
+    return response;
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Verification failed";
     return NextResponse.json({ error: msg }, { status: 500 });

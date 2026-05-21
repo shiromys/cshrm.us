@@ -15,7 +15,7 @@ const navItems = [
   { href: "/dashboard",          icon: LayoutDashboard, label: "Dashboard" },
   { href: "/contacts",           icon: Users,           label: "Global Directory" },
   { href: "/employer-contacts",  icon: Building2,       label: "My Contacts" },
-  { href: "/campaigns",          icon: Mail,            label: "Campaigns" },
+  { href: "/campaigns",          icon: Mail,            label: "Requirements" },
   { href: "/hotlists",           icon: List,            label: "Hotlists" },
   { href: "/jobs",               icon: Briefcase,       label: "CHRMNEXUS Jobs" },
   { href: "/settings",           icon: Settings,        label: "Settings" },

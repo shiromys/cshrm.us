@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createCheckoutSession, STRIPE_PRICES } from "@/lib/stripe";
+import { db, users } from "@/lib/db";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 
 export async function POST(req: NextRequest) {
@@ -19,11 +21,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Fetch the user so we can pass their existing Stripe customer ID.
+    // This ensures both subscriptions appear under the same customer in Stripe
+    // and are visible together in the billing portal.
+    const user = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, session.user.id),
+    });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
     const stripeSession = await createCheckoutSession({
       userId: session.user.id,
       userEmail: session.user.email,
+      customerId: user.stripeCustomerId ?? undefined,
       priceId: STRIPE_PRICES.CHRMNEXUS,
       successUrl: `${appUrl}/settings?chrmnexus=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${appUrl}/settings#chrmnexus`,

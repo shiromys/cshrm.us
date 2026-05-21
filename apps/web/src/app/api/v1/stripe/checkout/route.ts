@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     const checkout = await createCheckoutSession({
       userId: user.id,
       userEmail: user.email,
+      customerId,          // pass existing customer so Stripe reuses it
       priceId: STRIPE_PRICES.STANDARD,
       successUrl: `${appUrl}/settings?upgraded=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${appUrl}/settings`,

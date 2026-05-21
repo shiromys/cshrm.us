@@ -27,9 +27,10 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       if (!process.env.RESEND_API_KEY) return;
       const { resend } = await import("@/lib/email/resend");
-      // Append callbackURL so the verification button lands the user on /login directly
+      // Append callbackURL so after token validation, better-auth redirects to
+      // our status page which shows a success/failure message before login.
       const verificationUrl = new URL(url);
-      verificationUrl.searchParams.set("callbackURL", "/login");
+      verificationUrl.searchParams.set("callbackURL", "/email-verified");
       await resend.sendEmailVerification(user.email, user.name, verificationUrl.toString());
     },
   },

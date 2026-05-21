@@ -82,8 +82,26 @@ function PaymentVerifier() {
   );
 }
 
+function SettingsSkeleton() {
+  return (
+    <div className="p-8 max-w-3xl space-y-6 animate-pulse">
+      <div className="h-8 w-32 bg-gray-200 rounded" />
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl border bg-white p-6 space-y-4">
+          <div className="h-5 w-40 bg-gray-200 rounded" />
+          <div className="h-4 w-64 bg-gray-100 rounded" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="h-9 bg-gray-100 rounded" />
+            <div className="h-9 bg-gray-100 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const { data: session, isPending: sessionLoading } = useSession();
   const user = session?.user as unknown as Record<string, string> | undefined;
 
   // ── Profile state
@@ -189,6 +207,8 @@ export default function SettingsPage() {
 
   const tier = user?.tier ?? "free";
   const chrmnexusSubscribed = user?.chrmnexusSubscribed === "true" || (user as Record<string, unknown> | undefined)?.chrmnexusSubscribed === true;
+
+  if (sessionLoading) return <SettingsSkeleton />;
 
   return (
     <div className="p-8 max-w-3xl space-y-6">

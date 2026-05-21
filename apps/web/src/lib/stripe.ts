@@ -26,6 +26,7 @@ export const STRIPE_PRICES = {
 export async function createCheckoutSession({
   userId,
   userEmail,
+  customerId,
   priceId,
   successUrl,
   cancelUrl,
@@ -33,6 +34,7 @@ export async function createCheckoutSession({
 }: {
   userId: string;
   userEmail: string;
+  customerId?: string | null;
   priceId: string;
   successUrl: string;
   cancelUrl: string;
@@ -41,7 +43,10 @@ export async function createCheckoutSession({
   return getStripe().checkout.sessions.create({
     mode: "subscription",
     payment_method_types: ["card"],
-    customer_email: userEmail,
+    // Use existing Stripe customer when available so all subscriptions and
+    // invoices are consolidated under one customer (visible in billing portal).
+    // Fall back to customer_email only for first-time checkouts.
+    ...(customerId ? { customer: customerId } : { customer_email: userEmail }),
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: successUrl,
     cancel_url: cancelUrl,
