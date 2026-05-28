@@ -59,6 +59,7 @@ export const auth = betterAuth({
       stripeSubscriptionId:          { type: "string",  required: false },
       chrmnexusSubscribed:           { type: "boolean", required: false, defaultValue: false },
       chrmnexusStripeSubscriptionId: { type: "string",  required: false },
+      operationMode:                 { type: "string",  required: false },
     },
   },
 });

@@ -5,6 +5,7 @@ import {
 export const tierEnum = pgEnum("tier", ["free", "standard"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "suspended"]);
 export const roleEnum = pgEnum("role", ["user", "admin"]);
+export const operationModeEnum = pgEnum("operation_mode", ["requirements", "hotlist"]);
 
 export const users = pgTable("users", {
   id:                            text("id").primaryKey(),           // Better Auth generates nanoid strings
@@ -21,6 +22,7 @@ export const users = pgTable("users", {
   stripeSubscriptionId:          varchar("stripe_subscription_id", { length: 100 }),
   chrmnexusSubscribed:           boolean("chrmnexus_subscribed").notNull().default(false),
   chrmnexusStripeSubscriptionId: varchar("chrmnexus_stripe_subscription_id", { length: 100 }),
+  operationMode:                 operationModeEnum("operation_mode"),
   image:                         text("image"),
   createdAt:                     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:                     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

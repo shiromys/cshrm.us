@@ -11,21 +11,53 @@ import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
-const navItems = [
-  { href: "/dashboard",          icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/contacts",           icon: Users,           label: "Global Directory" },
-  { href: "/employer-contacts",  icon: Building2,       label: "My Contacts" },
-  { href: "/campaigns",          icon: Mail,            label: "Requirements" },
-  { href: "/hotlists",           icon: List,            label: "Hotlists" },
-  { href: "/jobs",               icon: Briefcase,       label: "CHRMNEXUS Jobs" },
-  { href: "/settings",           icon: Settings,        label: "Settings" },
+type NavItem = { href: string; icon: React.ComponentType<{ className?: string }>; label: string };
+
+const COMMON_NAV: NavItem[] = [
+  { href: "/dashboard",         icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/contacts",          icon: Users,           label: "Contacts" },
+  { href: "/employer-contacts", icon: Building2,       label: "My Contacts" },
+];
+
+const REQUIREMENTS_NAV: NavItem[] = [
+  { href: "/campaigns",         icon: Mail,            label: "Requirements" },
+];
+
+const HOTLIST_NAV: NavItem[] = [
+  { href: "/hotlists",          icon: List,            label: "Hotlists" },
+];
+
+const BOTTOM_NAV: NavItem[] = [
+  { href: "/jobs",              icon: Briefcase,       label: "CHRMNEXUS Jobs" },
+  { href: "/settings",          icon: Settings,        label: "Settings" },
+];
+
+// Admins see everything
+const ADMIN_FULL_NAV: NavItem[] = [
+  ...COMMON_NAV,
+  ...REQUIREMENTS_NAV,
+  ...HOTLIST_NAV,
+  ...BOTTOM_NAV,
 ];
 
 export function AppSidebar() {
-  const pathname = usePathname();
+  const pathname  = usePathname();
   const { data: session } = useSession();
-  const router = useRouter();
-  const isAdmin = (session?.user as unknown as Record<string, string>)?.role === "admin";
+  const router    = useRouter();
+
+  const user         = session?.user as unknown as Record<string, string> | undefined;
+  const isAdmin      = user?.role === "admin";
+  const operationMode = user?.operationMode as "requirements" | "hotlist" | undefined;
+
+  // Build the nav list based on role + mode
+  const navItems: NavItem[] = isAdmin
+    ? ADMIN_FULL_NAV
+    : [
+        ...COMMON_NAV,
+        ...(operationMode === "requirements" ? REQUIREMENTS_NAV : []),
+        ...(operationMode === "hotlist"      ? HOTLIST_NAV      : []),
+        ...BOTTOM_NAV,
+      ];
 
   return (
     <aside className="w-64 min-h-screen bg-brand-600 text-white flex flex-col">
@@ -38,6 +70,17 @@ export function AppSidebar() {
             <p className="text-xs text-blue-200 truncate">{session?.user?.email}</p>
           </div>
         </div>
+        {/* Mode badge — non-admin only */}
+        {!isAdmin && operationMode && (
+          <div className={`mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+            operationMode === "hotlist"
+              ? "bg-emerald-500/20 text-emerald-200"
+              : "bg-indigo-500/20 text-indigo-200"
+          }`}>
+            {operationMode === "hotlist" ? <List className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
+            {operationMode === "hotlist" ? "Hotlist mode" : "Requirements mode"}
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
@@ -87,9 +130,9 @@ export function AppSidebar() {
       <div className="p-4 border-t border-white/10 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-blue-200">
-            {(session?.user as unknown as Record<string, string>)?.tier === "standard" ? "Standard — $95/mo" : "Free Tier"}
+            {user?.tier === "standard" ? "Standard — $95/mo" : "Free Tier"}
           </span>
-          {(session?.user as unknown as Record<string, string>)?.tier === "free" && (
+          {user?.tier === "free" && (
             <Link href="/settings#upgrade" className="text-xs bg-white text-brand-600 px-2 py-1 rounded font-semibold hover:bg-blue-50">
               Upgrade
             </Link>

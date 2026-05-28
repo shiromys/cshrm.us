@@ -6,26 +6,30 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { campaignSchema, type CampaignInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { Users, Building2, List, Info, Plus, X, Briefcase, UserCheck } from "lucide-react";
+import { Users, Building2, Info, Plus, X } from "lucide-react";
 
 interface Hotlist { id: string; name: string; }
 interface PreviewCount { platform: number; myContacts: number; total: number; }
 
-/** Top-level operation the user chose */
-type AppMode = "requirements" | "hotlist";
-
 export default function NewCampaignPage() {
   const router = useRouter();
-  const [appMode, setAppMode] = useState<AppMode | null>(null);
+  const { data: session } = useSession();
+  const user = session?.user as unknown as Record<string, string> | undefined;
+  const isAdmin = user?.role === "admin";
+  const operationMode = (user?.operationMode ?? "requirements") as "requirements" | "hotlist";
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
     resolver: zodResolver(campaignSchema),
-    defaultValues: { targetType: "employer", includeEmployerContacts: true },
+    defaultValues: {
+      targetType: operationMode === "hotlist" ? "hotlist" : "employer",
+      includeEmployerContacts: true,
+    },
   });
 
   const targetType = watch("targetType");
@@ -39,29 +43,24 @@ export default function NewCampaignPage() {
   const [addingContact, setAddingContact]   = useState(false);
   const [newContact, setNewContact] = useState({ name: "", email: "", companyName: "" });
 
-  // When mode changes, set sensible defaults for targetType
+  // Force correct targetType based on mode
   useEffect(() => {
-    if (appMode === "hotlist") {
+    if (operationMode === "hotlist") {
       setValue("targetType", "hotlist");
-      setValue("hotlistId", undefined);
-    } else if (appMode === "requirements") {
-      setValue("targetType", "employer");
-      setValue("hotlistId", undefined);
     }
-  }, [appMode, setValue]);
+  }, [operationMode, setValue]);
 
-  // Load hotlists when hotlist mode is active
+  // Load hotlists for hotlist mode
   useEffect(() => {
-    if (appMode !== "hotlist") return;
+    if (operationMode !== "hotlist" && !isAdmin) return;
     fetch("/api/v1/hotlists")
       .then((r) => r.ok ? r.json() : [])
       .then((data: Hotlist[]) => setHotlists(data))
       .catch(() => {});
-  }, [appMode]);
+  }, [operationMode, isAdmin]);
 
-  // Refresh recipient preview whenever targeting options change
+  // Refresh recipient preview
   useEffect(() => {
-    if (!appMode) return;
     const params = new URLSearchParams({ targetType, includeEC: String(includeEC ?? true) });
     if (hotlistId) params.set("hotlistId", hotlistId);
     setPreviewLoading(true);
@@ -70,7 +69,7 @@ export default function NewCampaignPage() {
       .then(setPreview)
       .catch(() => setPreview(null))
       .finally(() => setPreviewLoading(false));
-  }, [appMode, targetType, hotlistId, includeEC]);
+  }, [targetType, hotlistId, includeEC]);
 
   async function handleAddContact() {
     if (!newContact.name || !newContact.email) { toast.error("Name and email are required"); return; }
@@ -104,7 +103,7 @@ export default function NewCampaignPage() {
     });
     if (!res.ok) { toast.error("Failed to create"); return; }
     const campaign = await res.json();
-    toast.success(appMode === "hotlist" ? "Hotlist campaign created as draft" : "Requirement created as draft");
+    toast.success(operationMode === "hotlist" ? "Hotlist email created as draft" : "Requirement created as draft");
     router.push(`/campaigns/${campaign.id}`);
   }
 
@@ -114,142 +113,100 @@ export default function NewCampaignPage() {
     if (preview.total === 0) return "⚠ No recipients found for this selection";
     if (targetType === "hotlist") return `${preview.platform} hotlist entries`;
     const parts: string[] = [];
-    if (preview.platform > 0) parts.push(`${preview.platform} platform contacts`);
+    if (preview.platform > 0) parts.push(`${preview.platform} contacts`);
     if (preview.myContacts > 0) parts.push(`${preview.myContacts} from My Contacts`);
     return `${preview.total} recipient${preview.total === 1 ? "" : "s"} — ${parts.join(" + ")}`;
   };
 
-  // ── Step 1: Mode picker ───────────────────────────────────────────────────
-  if (!appMode) {
-    return (
-      <div className="p-8 max-w-2xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">New Email Campaign</h1>
-          <p className="text-muted-foreground">What would you like to send?</p>
-        </div>
+  const isHotlistMode = operationMode === "hotlist" || isAdmin;
+  const isRequirementsMode = operationMode === "requirements" || isAdmin;
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Requirements mode */}
-          <button
-            type="button"
-            onClick={() => setAppMode("requirements")}
-            className="group rounded-2xl border-2 border-border hover:border-primary bg-white hover:bg-primary/5 p-6 text-left transition-all shadow-sm hover:shadow-md"
-          >
-            <div className="mb-4 inline-flex p-3 rounded-xl bg-indigo-100 group-hover:bg-indigo-200 transition-colors">
-              <Briefcase className="w-6 h-6 text-indigo-600" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900 mb-2">Send a Requirement</h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              You have a job opening. Email your list of <strong>recruiters / vendors</strong> asking them to send matching candidates your way.
-            </p>
-            <p className="mt-3 text-xs font-semibold text-indigo-600">
-              Target → Employer or Candidate contacts
-            </p>
-          </button>
-
-          {/* Hotlist mode */}
-          <button
-            type="button"
-            onClick={() => setAppMode("hotlist")}
-            className="group rounded-2xl border-2 border-border hover:border-primary bg-white hover:bg-primary/5 p-6 text-left transition-all shadow-sm hover:shadow-md"
-          >
-            <div className="mb-4 inline-flex p-3 rounded-xl bg-emerald-100 group-hover:bg-emerald-200 transition-colors">
-              <UserCheck className="w-6 h-6 text-emerald-600" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900 mb-2">Share a Hotlist</h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              You have candidates on the bench. Email your list of <strong>employers / hiring managers</strong> with a formatted table of available resources.
-            </p>
-            <p className="mt-3 text-xs font-semibold text-emerald-600">
-              Target → Employer contacts via a hotlist
-            </p>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Step 2: Campaign form ────────────────────────────────────────────────
   return (
     <div className="p-8 max-w-3xl">
-      <div className="mb-6 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setAppMode(null)}
-          className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-        >
-          ← Change mode
-        </button>
-        <span className="text-muted-foreground">/</span>
-        <div className={`inline-flex items-center gap-1.5 text-sm font-semibold px-2.5 py-1 rounded-full ${
-          appMode === "hotlist" ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
-        }`}>
-          {appMode === "hotlist" ? <UserCheck className="w-3.5 h-3.5" /> : <Briefcase className="w-3.5 h-3.5" />}
-          {appMode === "hotlist" ? "Hotlist mode" : "Requirements mode"}
-        </div>
+      <div className="mb-6">
         <h1 className="text-2xl font-bold">
-          {appMode === "hotlist" ? "New Hotlist Email" : "New Requirement"}
+          {operationMode === "hotlist" ? "New Hotlist Email" : "New Requirement"}
         </h1>
+        <p className="text-muted-foreground">
+          {operationMode === "hotlist"
+            ? "Send a formatted bench list to your employer contacts"
+            : "Send a job requirement to your recruiter network"}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Details */}
         <Card>
           <CardHeader>
-            <CardTitle>{appMode === "hotlist" ? "Email Details" : "Requirement Details"}</CardTitle>
+            <CardTitle>{operationMode === "hotlist" ? "Email Details" : "Requirement Details"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>{appMode === "hotlist" ? "Hotlist Name (internal)" : "Requirement Name (internal)"}</Label>
-              <Input {...register("name")} placeholder={appMode === "hotlist" ? "Java Bench — May 2026" : "Q1 Java Requirements — Dallas"} />
+              <Label>{operationMode === "hotlist" ? "Name (internal)" : "Requirement Name (internal)"}</Label>
+              <Input
+                {...register("name")}
+                placeholder={operationMode === "hotlist" ? "Java Bench — May 2026" : "Q1 Java Requirements — Dallas"}
+              />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="space-y-2">
               <Label>Email Subject Line</Label>
-              <Input {...register("subject")} placeholder={appMode === "hotlist" ? "Available Java / Spring Boot Consultants — Bench List" : "New Java/Spring Boot Requirement — Dallas TX (C2C)"} />
+              <Input
+                {...register("subject")}
+                placeholder={
+                  operationMode === "hotlist"
+                    ? "Available Java / Spring Boot Consultants — Bench List"
+                    : "New Java/Spring Boot Requirement — Dallas TX (C2C)"
+                }
+              />
               {errors.subject && <p className="text-xs text-destructive">{errors.subject.message}</p>}
             </div>
           </CardContent>
         </Card>
 
+        {/* Body */}
         <Card>
           <CardHeader>
             <CardTitle>Email Body</CardTitle>
             <CardDescription>
-              {appMode === "hotlist"
-                ? "Write your intro/cover note. The hotlist table will be appended automatically."
-                : "Describe the requirement. Use tokens like {{name}} to personalise each email."}
+              {operationMode === "hotlist"
+                ? "Write your intro note. The hotlist candidate table is appended automatically."
+                : "Describe the requirement. Use {{name}} to personalise each email."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <RichTextEditor
               value={watch("bodyHtml") ?? ""}
               onChange={(html) => setValue("bodyHtml", html, { shouldValidate: true })}
-              placeholder={appMode === "hotlist"
-                ? "Hi {{name}}, please find our available bench candidates below. Let us know if any match your current openings."
-                : "Hi {{name}}, we have a new Java Developer requirement in Dallas TX (C2C/W2, 6 months). Please reach out if you have matching profiles."}
+              placeholder={
+                operationMode === "hotlist"
+                  ? "Hi {{name}}, please find our available bench candidates below. Let us know if any match your current openings."
+                  : "Hi {{name}}, we have a new Java Developer requirement in Dallas TX (C2C/W2, 6 months). Please reach out if you have matching profiles."
+              }
             />
             {errors.bodyHtml && <p className="text-xs text-destructive mt-2">{errors.bodyHtml.message}</p>}
           </CardContent>
         </Card>
 
+        {/* Targeting */}
         <Card>
           <CardHeader>
             <CardTitle>Targeting</CardTitle>
             <CardDescription>
-              {appMode === "hotlist"
-                ? "Select the hotlist whose candidates will be emailed to your employer contacts"
+              {operationMode === "hotlist"
+                ? "Select which hotlist to send — it will be emailed to your employer contacts"
                 : "Choose which contacts will receive this requirement"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
 
-            {/* ── HOTLIST MODE: only hotlist picker ── */}
-            {appMode === "hotlist" && (
+            {/* ── HOTLIST MODE ── */}
+            {operationMode === "hotlist" && (
               <div className="space-y-2">
                 <Label>Select Hotlist <span className="text-destructive">*</span></Label>
                 {hotlists.length === 0 ? (
                   <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
-                    No hotlists found. <a href="/hotlists" className="underline text-primary">Create a hotlist</a> first.
+                    No hotlists yet. <a href="/hotlists" className="underline text-primary">Create a hotlist first.</a>
                   </p>
                 ) : (
                   <select
@@ -263,15 +220,15 @@ export default function NewCampaignPage() {
                     ))}
                   </select>
                 )}
-                <input type="hidden" {...register("targetType")} />
+                <input type="hidden" {...register("targetType")} value="hotlist" />
                 <p className="text-xs text-muted-foreground">
-                  The hotlist will be sent to your <strong>employer contacts</strong> as a formatted candidate table.
+                  The candidate table will be sent to your <strong>employer contacts</strong>.
                 </p>
               </div>
             )}
 
-            {/* ── REQUIREMENTS MODE: employer / candidate picker + My Contacts ── */}
-            {appMode === "requirements" && (
+            {/* ── REQUIREMENTS MODE ── */}
+            {operationMode === "requirements" && (
               <>
                 <div>
                   <Label className="mb-2 block">Target Audience</Label>
@@ -313,7 +270,7 @@ export default function NewCampaignPage() {
                           Include My Contacts
                         </label>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Merge your private employer contacts with platform contacts. Duplicates removed automatically.
+                          Merge your private employer contacts. Duplicates removed automatically.
                         </p>
                       </div>
                       <button
@@ -353,7 +310,41 @@ export default function NewCampaignPage() {
               </>
             )}
 
-            {/* Live recipient count */}
+            {/* ── ADMIN: full targeting picker ── */}
+            {isAdmin && (
+              <div>
+                <Label className="mb-2 block">Target Audience (Admin Override)</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    { value: "employer",  label: "Employer Contacts", icon: Building2 },
+                    { value: "candidate", label: "Candidate Contacts", icon: Users },
+                    { value: "hotlist",   label: "Specific Hotlist", icon: Info },
+                  ] as const).map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => { setValue("targetType", value); setValue("hotlistId", undefined); }}
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-colors
+                        ${targetType === value ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <input type="hidden" {...register("targetType")} />
+                {targetType === "hotlist" && (
+                  <div className="mt-3">
+                    <select {...register("hotlistId")} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" defaultValue="">
+                      <option value="" disabled>— choose a hotlist —</option>
+                      {hotlists.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recipient count */}
             {recipientSummary() && (
               <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${
                 preview?.total === 0 ? "bg-destructive/10 text-destructive" : "bg-emerald-50 text-emerald-700"
@@ -366,7 +357,10 @@ export default function NewCampaignPage() {
         </Card>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={isSubmitting || (appMode === "hotlist" && !hotlistId)}>
+          <Button
+            type="submit"
+            disabled={isSubmitting || (operationMode === "hotlist" && !hotlistId && !isAdmin)}
+          >
             {isSubmitting ? "Saving..." : "Save as Draft"}
           </Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
