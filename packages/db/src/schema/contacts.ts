@@ -36,6 +36,7 @@ export const contacts = pgTable("contacts", {
   profileSummary:   text("profile_summary"),
   coverLetter:      text("cover_letter"),
   skills:           text("skills").array(),
+  addedBy:          text("added_by").references(() => users.id, { onDelete: "set null" }),
   unsubscribed:     boolean("unsubscribed").notNull().default(false),
   unsubscribedAt:   timestamp("unsubscribed_at", { withTimezone: true }),
   notes:            text("notes"),

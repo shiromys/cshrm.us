@@ -65,7 +65,7 @@ export default async function AdminPage() {
     <div className="p-8 space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Admin Analytics</h1>
-        <p className="text-muted-foreground">SHIRO Technologies internal dashboard</p>
+        <p className="text-muted-foreground">Internal dashboard</p>
       </div>
 
       {/* ── Subscriber stats ── */}

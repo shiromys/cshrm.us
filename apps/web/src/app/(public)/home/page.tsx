@@ -16,7 +16,7 @@ export default function HomePage() {
         <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
           <div className="inline-flex items-center gap-2 bg-pub-50 border border-pub-200 rounded-full px-4 py-1.5 text-xs font-semibold text-pub-700 mb-8">
             <span className="w-1.5 h-1.5 bg-pub-500 rounded-full animate-pulse" />
-            Part of the CHRM NEXUS Ecosystem · By SHIRO Technologies
+            Part of the CHRM NEXUS Ecosystem
           </div>
 
           <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 leading-tight tracking-tight mb-6">
@@ -211,7 +211,7 @@ export default function HomePage() {
               <span className="text-pub-400">CHRM NEXUS Platform</span>
             </h2>
             <p className="text-slate-400 leading-relaxed mb-6">
-              CloudSourceHRM is part of the SHIRO Technologies ecosystem. Your member portal connects directly to CHRM NEXUS — the global hub for recruitment market intelligence — giving you access to thousands of live job requirements and enabling you to apply directly from within your workspace.
+              Your member portal connects directly to CHRM NEXUS — the global hub for recruitment market intelligence — giving you access to thousands of live job requirements and enabling you to apply directly from within your workspace.
             </p>
             <div className="flex gap-4">
               <a href="https://www.cloudsourcehrm.com" target="_blank" className="flex items-center gap-2 border border-slate-700 text-slate-300 font-medium px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-sm">

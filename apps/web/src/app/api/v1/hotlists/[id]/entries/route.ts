@@ -5,6 +5,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { hotlistEntrySchema } from "@/lib/schemas";
 import { normaliseName } from "@/lib/utils";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 export async function GET(
   request: NextRequest,
@@ -51,5 +52,6 @@ export async function POST(
     `UPDATE hotlists SET total_entries = (SELECT COUNT(*) FROM hotlist_entries WHERE hotlist_id = '${id}') WHERE id = '${id}'`
   );
 
+  revalidatePath("/dashboard");
   return NextResponse.json(entry, { status: 201 });
 }

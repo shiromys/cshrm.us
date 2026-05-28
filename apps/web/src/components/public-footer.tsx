@@ -16,12 +16,6 @@ export function PublicFooter() {
             <p className="text-sm leading-relaxed max-w-xs">
               The recruiter member portal for the CHRM NEXUS ecosystem. Manage contacts, send requirements, and build hotlists — all from one place.
             </p>
-            <p className="text-xs mt-4 text-slate-500">
-              A product of{" "}
-              <a href="https://shirotechnologies.com" target="_blank" className="text-pub-400 hover:text-pub-300">
-                SHIRO Technologies LLC
-              </a>
-            </p>
           </div>
 
           {/* Product */}

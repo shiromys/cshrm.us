@@ -39,7 +39,6 @@ export default function CandidateLandingPage() {
       <header className="px-8 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-white text-2xl font-bold">CloudSourceHRM</h1>
-          <p className="text-green-200 text-sm">Powered by SHIRO Technologies</p>
         </div>
       </header>
 

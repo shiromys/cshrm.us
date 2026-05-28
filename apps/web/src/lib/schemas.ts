@@ -85,7 +85,7 @@ export const hotlistEntrySchema = z.object({
   availability: z.string().optional(),
   rateSalary: z.string().optional(),
   profileSummary: z.string().max(300).optional(),
-  contactEmail: z.string().email().optional(),
+  contactEmail: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional()),
   contactPhone: z.string().optional(),
 });
 

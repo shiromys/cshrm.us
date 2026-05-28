@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"; // always fetch fresh counts
+
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db, campaigns, emailLogs, hotlists, contacts, employerContacts } from "@/lib/db";

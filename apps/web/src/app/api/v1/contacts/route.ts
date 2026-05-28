@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, contacts } from "@/lib/db";
-import { eq, and, isNull, ilike, or } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import type { NewContact } from "@cloudsourcehrm/db/schema";
 
 export async function GET(request: NextRequest) {
@@ -12,11 +13,14 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") ?? "";
   const type = searchParams.get("type") as "employer" | "candidate" | null;
-  const status = searchParams.get("status") as "active" | "inactive" | null;
+  const isAdmin = (session.user as unknown as Record<string, string>).role === "admin";
 
-  const conditions = [isNull(contacts.deletedAt)];
+  // Non-admin users only see contacts they added
+  const conditions: ReturnType<typeof isNull>[] = [isNull(contacts.deletedAt)];
+  if (!isAdmin) {
+    conditions.push(eq(contacts.addedBy, session.user.id));
+  }
   if (type) conditions.push(eq(contacts.contactType, type));
-  if (status) conditions.push(eq(contacts.status, status));
 
   let list = await db.select().from(contacts).where(and(...conditions));
 
@@ -30,7 +34,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ contacts: list, total: list.length });
+  // Summary counts for the contacts page
+  const companies = list.filter((c) => c.contactType === "employer").length;
+  const resources  = list.filter((c) => c.contactType === "candidate").length;
+
+  return NextResponse.json({ contacts: list, total: list.length, companies, resources });
 }
 
 export async function POST(request: NextRequest) {
@@ -75,6 +83,7 @@ export async function POST(request: NextRequest) {
         industry: get(row, "industry", "Industry"),
         contactType: contactType as "employer" | "candidate",
         source: "csv_import" as const,
+        addedBy: session.user.id,
       }))
       .filter((r) => !!(r.email && r.name))
       .map((r) => ({ ...r, email: r.email as string, name: r.name as string })) as NewContact[];
@@ -92,6 +101,8 @@ export async function POST(request: NextRequest) {
       await db.insert(contacts).values(toInsert.slice(i, i + CHUNK)).onConflictDoNothing();
       inserted += toInsert.slice(i, i + CHUNK).length;
     }
+
+    revalidatePath("/dashboard");
     return NextResponse.json({ inserted, skipped: rows.length - inserted }, { status: 201 });
   }
 
@@ -103,6 +114,9 @@ export async function POST(request: NextRequest) {
   const [contact] = await db.insert(contacts).values({
     ...body,
     source: "manual",
+    addedBy: session.user.id,
   }).returning();
+
+  revalidatePath("/dashboard");
   return NextResponse.json(contact, { status: 201 });
 }
