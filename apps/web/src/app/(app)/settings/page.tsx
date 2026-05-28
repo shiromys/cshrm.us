@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, CreditCard, Zap, User, Lock, Mail, ExternalLink, Receipt } from "lucide-react";
+import { CheckCircle2, CreditCard, Zap, User, Lock, Mail, ExternalLink, Receipt, Briefcase, UserCheck } from "lucide-react";
 
 // Isolated component so useSearchParams is inside a Suspense boundary (required by Next.js 15)
 function PaymentVerifier() {
@@ -110,6 +110,11 @@ export default function SettingsPage() {
   const [replyTo, setReplyTo]      = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // ── Operation mode state
+  type OperationMode = "requirements" | "hotlist";
+  const [operationMode, setOperationMode] = useState<OperationMode | null>(null);
+  const [savingMode, setSavingMode]       = useState(false);
+
   // ── Password state
   const [currentPw, setCurrentPw]  = useState("");
   const [newPw, setNewPw]          = useState("");
@@ -122,8 +127,11 @@ export default function SettingsPage() {
       setName(user.name ?? "");
       setCompany(user.companyName ?? "");
       setReplyTo(user.replyToEmail ?? "");
+      if (user.operationMode === "requirements" || user.operationMode === "hotlist") {
+        setOperationMode(user.operationMode);
+      }
     }
-  }, [user?.name, user?.companyName, user?.replyToEmail]);
+  }, [user?.name, user?.companyName, user?.replyToEmail, user?.operationMode]);
 
   // ── Save profile (name, company, reply-to)
   async function saveProfile() {
@@ -136,6 +144,26 @@ export default function SettingsPage() {
     setSavingProfile(false);
     if (res.ok) toast.success("Profile updated.");
     else toast.error("Failed to save profile.");
+  }
+
+  // ── Save operation mode
+  async function saveMode() {
+    if (!operationMode) return;
+    setSavingMode(true);
+    try {
+      const res = await fetch("/api/v1/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operationMode }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Operation mode updated. Reloading…");
+      // Hard reload so sidebar rebuilds from the fresh session
+      setTimeout(() => window.location.replace("/settings"), 800);
+    } catch {
+      toast.error("Failed to update operation mode.");
+      setSavingMode(false);
+    }
   }
 
   // ── Change password
@@ -277,6 +305,82 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Operation Mode (non-admin only) ── */}
+      {user?.role !== "admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {operationMode === "hotlist"
+                ? <UserCheck className="w-5 h-5 text-emerald-600" />
+                : <Briefcase className="w-5 h-5 text-indigo-600" />}
+              Operation Mode
+            </CardTitle>
+            <CardDescription>
+              Switch how you use CloudSourceHRM. Changing this updates your sidebar and default campaign view.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                {
+                  value: "requirements" as const,
+                  icon: Briefcase,
+                  iconColor: "text-indigo-600",
+                  iconBg: "bg-indigo-100",
+                  selectedBorder: "border-indigo-500 bg-indigo-50",
+                  title: "Send Requirements",
+                  desc: "Email recruiters and vendors with your open job positions.",
+                },
+                {
+                  value: "hotlist" as const,
+                  icon: UserCheck,
+                  iconColor: "text-emerald-600",
+                  iconBg: "bg-emerald-100",
+                  selectedBorder: "border-emerald-500 bg-emerald-50",
+                  title: "Share Hotlists",
+                  desc: "Email employers a formatted table of your available bench candidates.",
+                },
+              ]).map(({ value, icon: Icon, iconColor, iconBg, selectedBorder, title, desc }) => {
+                const isSelected = operationMode === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setOperationMode(value)}
+                    className={`group rounded-xl border-2 p-4 text-left transition-all ${
+                      isSelected ? `${selectedBorder} shadow-sm` : "border-border bg-white hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <div className={`mb-3 inline-flex p-2.5 rounded-lg ${iconBg}`}>
+                      <Icon className={`w-5 h-5 ${iconColor}`} />
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground">{title}</p>
+                      {isSelected && (
+                        <span className="shrink-0 w-4 h-4 rounded-full bg-primary flex items-center justify-center mt-0.5">
+                          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end pt-1">
+              <Button
+                onClick={saveMode}
+                disabled={savingMode || operationMode === (user?.operationMode as string)}
+              >
+                {savingMode ? "Saving…" : "Save Mode"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Security / Change Password ── */}
       <Card>
