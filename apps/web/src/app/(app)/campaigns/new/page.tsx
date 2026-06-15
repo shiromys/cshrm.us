@@ -6,20 +6,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { requirementSchema, travelOptions, type RequirementInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { CheckCircle2, ChevronRight, ChevronLeft, Send, Briefcase, MapPin, DollarSign, Users, Mail, Eye } from "lucide-react";
+import { CheckCircle2, ChevronRight, ChevronLeft, Send, Briefcase, MapPin, Mail, Eye, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ── Step metadata ────────────────────────────────────────────────────────────
+// ── Constants (module-level — never recreated) ──────────────────────────────
 const STEPS = [
-  { id: 1, label: "Job Details",           icon: Briefcase },
-  { id: 2, label: "Description & Skills",  icon: MapPin },
-  { id: 3, label: "Contact Details",       icon: Mail },
-  { id: 4, label: "Review & Send",         icon: Eye },
+  { id: 1, label: "Job Details",          icon: Briefcase },
+  { id: 2, label: "Description & Skills", icon: MapPin },
+  { id: 3, label: "Contact Details",      icon: Mail },
+  { id: 4, label: "Review & Send",        icon: Eye },
 ];
 
 const STEP_FIELDS: Record<number, (keyof RequirementInput)[]> = {
@@ -28,7 +27,30 @@ const STEP_FIELDS: Record<number, (keyof RequirementInput)[]> = {
   3: ["recipientEmails"],
 };
 
-// ── Pill selector ─────────────────────────────────────────────────────────────
+// ── Pure helper functions (module-level) ─────────────────────────────────────
+function workSettingLabel(v: string) {
+  return ({ remote: "Remote", onsite: "On-Site", hybrid: "Hybrid" } as Record<string, string>)[v] ?? v;
+}
+function hireTypeLabel(v: string) {
+  return ({ direct_hire: "Direct Hire", contract: "Contract" } as Record<string, string>)[v] ?? v;
+}
+function positionTypeLabel(v: string) {
+  return ({ full_time: "Full Time", part_time: "Part Time" } as Record<string, string>)[v] ?? v;
+}
+function payDisplay(d: RequirementInput): string {
+  const freq = d.payFrequency === "annual" ? "yr" : "hr";
+  if (d.payType === "depends_on_experience") return "Depends on Experience";
+  if (d.payType === "exact" && d.payExact) return `$${d.payExact.toLocaleString()} / ${freq}`;
+  if (d.payType === "range" && (d.payMin || d.payMax)) {
+    const min = d.payMin ? `$${d.payMin.toLocaleString()}` : "—";
+    const max = d.payMax ? `$${d.payMax.toLocaleString()}` : "—";
+    return `${min} – ${max} / ${freq}`;
+  }
+  return d.payFrequency === "annual" ? "Annual" : "Hourly";
+}
+
+// ── Shared UI components (module-level — stable references across renders) ───
+
 function PillGroup<T extends string>({
   options, value, onChange, cols = 3,
 }: {
@@ -61,7 +83,7 @@ function PillGroup<T extends string>({
 function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex gap-3">
-      {[{ v: false, label: "No" }, { v: true, label: "Yes" }].map(({ v, label }) => (
+      {([{ v: false, label: "No" }, { v: true, label: "Yes" }] as const).map(({ v, label }) => (
         <button
           key={label}
           type="button"
@@ -83,38 +105,107 @@ function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between py-2 border-b border-border last:border-0 text-sm">
-      <span className="text-muted-foreground font-medium w-[40%] shrink-0">{label}</span>
+      <span className="text-muted-foreground font-medium w-[42%] shrink-0">{label}</span>
       <span className="text-foreground font-semibold text-right">{value}</span>
     </div>
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function workSettingLabel(v: string) {
-  return { remote: "Remote", onsite: "On-Site", hybrid: "Hybrid" }[v] ?? v;
+function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        {desc && <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>}
+      </div>
+      {children}
+    </div>
+  );
 }
-function hireTypeLabel(v: string) {
-  return { direct_hire: "Direct Hire", contract: "Contract" }[v] ?? v;
+
+function Field({ label, error, children, hint }: {
+  label: string; error?: string; children: React.ReactNode; hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {hint  && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
 }
-function positionTypeLabel(v: string) {
-  return { full_time: "Full Time", part_time: "Part Time" }[v] ?? v;
+
+function StepperHeader({ step }: { step: number }) {
+  return (
+    <div className="flex items-start gap-0 mb-8">
+      {STEPS.map((s, idx) => {
+        const done   = step > s.id;
+        const active = step === s.id;
+        const Icon   = s.icon;
+        return (
+          <div key={s.id} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors shrink-0",
+                done   ? "bg-primary border-primary text-white"
+                       : active ? "bg-primary/10 border-primary text-primary"
+                                : "bg-white border-border text-muted-foreground",
+              )}>
+                {done ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
+              </div>
+              <span className={cn(
+                "text-xs font-medium hidden sm:block whitespace-nowrap text-center",
+                active ? "text-primary" : done ? "text-primary/70" : "text-muted-foreground",
+              )}>
+                {s.label}
+              </span>
+            </div>
+            {idx < STEPS.length - 1 && (
+              <div className={cn("flex-1 h-0.5 mx-2 mt-[-14px]", done ? "bg-primary" : "bg-border")} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
-function payDisplay(d: RequirementInput): string {
-  const freq = d.payFrequency === "annual" ? "yr" : "hr";
-  if (d.payType === "depends_on_experience") return "Depends on Experience";
-  if (d.payType === "exact" && d.payExact) return `$${d.payExact.toLocaleString()} / ${freq}`;
-  if (d.payType === "range" && (d.payMin || d.payMax)) {
-    const min = d.payMin ? `$${d.payMin.toLocaleString()}` : "—";
-    const max = d.payMax ? `$${d.payMax.toLocaleString()}` : "—";
-    return `${min} – ${max} / ${freq}`;
-  }
-  return d.payFrequency === "annual" ? "Annual" : "Hourly";
+
+function NavButtons({
+  step, onBack, onNext, nextLabel = "Continue", isSubmit = false, sending = false,
+}: {
+  step: number;
+  onBack: () => void;
+  onNext?: () => void;
+  nextLabel?: string;
+  isSubmit?: boolean;
+  sending?: boolean;
+}) {
+  return (
+    <div className="flex justify-between pt-6 border-t border-border mt-8">
+      {step > 1 ? (
+        <Button type="button" variant="outline" onClick={onBack} className="gap-2">
+          <ChevronLeft className="w-4 h-4" /> Back
+        </Button>
+      ) : (
+        <Button type="button" variant="outline" onClick={onBack}>Cancel</Button>
+      )}
+      {isSubmit ? (
+        <Button type="submit" disabled={sending} className="gap-2">
+          {sending ? "Sending…" : <><Send className="w-4 h-4" /> Send Requirement</>}
+        </Button>
+      ) : (
+        <Button type="button" onClick={onNext} className="gap-2">
+          {nextLabel} <ChevronRight className="w-4 h-4" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 export default function NewRequirementPage() {
   const router = useRouter();
-  const { data: session } = useSession();
 
   const [step, setStep]             = useState(1);
   const [skillInput, setSkillInput] = useState("");
@@ -152,8 +243,12 @@ export default function NewRequirementPage() {
   }
 
   function goBack() {
-    setStep((s) => s - 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (step > 1) {
+      setStep((s) => s - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      router.back();
+    }
   }
 
   function addSkill() {
@@ -188,85 +283,6 @@ export default function NewRequirementPage() {
     }
   });
 
-  // ── Stepper ────────────────────────────────────────────────────────────────
-  const StepperHeader = () => (
-    <div className="flex items-start gap-0 mb-8">
-      {STEPS.map((s, idx) => {
-        const done   = step > s.id;
-        const active = step === s.id;
-        const Icon   = s.icon;
-        return (
-          <div key={s.id} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1.5">
-              <div className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors shrink-0",
-                done   ? "bg-primary border-primary text-white"
-                       : active ? "bg-primary/10 border-primary text-primary"
-                                : "bg-white border-border text-muted-foreground",
-              )}>
-                {done ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
-              </div>
-              <span className={cn(
-                "text-xs font-medium hidden sm:block whitespace-nowrap text-center",
-                active ? "text-primary" : done ? "text-primary/70" : "text-muted-foreground",
-              )}>
-                {s.label}
-              </span>
-            </div>
-            {idx < STEPS.length - 1 && (
-              <div className={cn("flex-1 h-0.5 mx-2 mt-[-14px]", done ? "bg-primary" : "bg-border")} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const NavButtons = ({ onNext, nextLabel = "Continue", isSubmit = false }: {
-    onNext?: () => void; nextLabel?: string; isSubmit?: boolean;
-  }) => (
-    <div className="flex justify-between pt-6 border-t border-border mt-8">
-      {step > 1 ? (
-        <Button type="button" variant="outline" onClick={goBack} className="gap-2">
-          <ChevronLeft className="w-4 h-4" /> Back
-        </Button>
-      ) : (
-        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-      )}
-      {isSubmit ? (
-        <Button type="submit" disabled={sending} className="gap-2">
-          {sending ? "Sending…" : <><Send className="w-4 h-4" /> Send Requirement</>}
-        </Button>
-      ) : (
-        <Button type="button" onClick={onNext} className="gap-2">
-          {nextLabel} <ChevronRight className="w-4 h-4" />
-        </Button>
-      )}
-    </div>
-  );
-
-  const Section = ({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) => (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        {desc && <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>}
-      </div>
-      {children}
-    </div>
-  );
-
-  const Field = ({ label, error, children, hint }: {
-    label: string; error?: string; children: React.ReactNode; hint?: string;
-  }) => (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-      {hint  && <p className="text-xs text-muted-foreground">{hint}</p>}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-
-  // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="p-6 sm:p-8 max-w-2xl">
       <div className="mb-6">
@@ -274,7 +290,7 @@ export default function NewRequirementPage() {
         <p className="text-muted-foreground text-sm mt-1">Fill in the job details and send to your recruiter network.</p>
       </div>
 
-      <StepperHeader />
+      <StepperHeader step={step} />
 
       <form onSubmit={onSubmit} className="bg-white border border-border rounded-xl p-6 shadow-sm">
 
@@ -349,8 +365,8 @@ export default function NewRequirementPage() {
                 <Field label="Pay Type *" error={errors.payType?.message}>
                   <PillGroup
                     options={[
-                      { value: "range" as const,                label: "Range" },
-                      { value: "exact" as const,                label: "Exact" },
+                      { value: "range" as const,                 label: "Range" },
+                      { value: "exact" as const,                 label: "Exact" },
                       { value: "depends_on_experience" as const, label: "Depends on Experience" },
                     ]}
                     value={w.payType}
@@ -397,7 +413,7 @@ export default function NewRequirementPage() {
               </Section>
             </div>
 
-            <NavButtons onNext={goNext} />
+            <NavButtons step={step} onBack={goBack} onNext={goNext} />
           </div>
         )}
 
@@ -439,7 +455,7 @@ export default function NewRequirementPage() {
               </div>
             </Section>
 
-            <NavButtons onNext={goNext} />
+            <NavButtons step={step} onBack={goBack} onNext={goNext} />
           </div>
         )}
 
@@ -463,7 +479,7 @@ export default function NewRequirementPage() {
               </Field>
             </Section>
 
-            <NavButtons onNext={goNext} nextLabel="Review" />
+            <NavButtons step={step} onBack={goBack} onNext={goNext} nextLabel="Review" />
           </div>
         )}
 
@@ -537,7 +553,7 @@ export default function NewRequirementPage() {
               </div>
             </Section>
 
-            <NavButtons isSubmit />
+            <NavButtons step={step} onBack={goBack} isSubmit sending={sending} />
           </div>
         )}
 
