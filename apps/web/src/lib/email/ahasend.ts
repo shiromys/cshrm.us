@@ -16,6 +16,8 @@ export interface AhaSendMessage {
   subject: string;
   html: string;
   text: string;
+  cc?: string[];        // optional CC recipients
+  emailLogId?: string;  // passed through for caller tracking — not sent to AhaSend API
 }
 
 /**
@@ -51,6 +53,7 @@ async function sendOne(message: AhaSendMessage): Promise<void> {
       html_content: message.html,
       text_content: message.text,
       ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
+      ...(message.cc?.length ? { cc: message.cc.map((e) => ({ email: e })) } : {}),
     };
   } else {
     // ── v1 API ────────────────────────────────────────────────────────────────
@@ -65,6 +68,7 @@ async function sendOne(message: AhaSendMessage): Promise<void> {
     payload = {
       from: { email: FROM, name: message.fromName },
       recipients: [{ email: message.to, name: message.toName ?? message.to }],
+      ...(message.cc?.length ? { cc: message.cc.map((e) => ({ email: e })) } : {}),
       content: {
         subject: message.subject,
         html_body: message.html,
