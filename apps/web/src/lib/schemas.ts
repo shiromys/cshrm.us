@@ -68,6 +68,43 @@ export const campaignSchema = z.object({
   includeEmployerContacts: z.boolean().default(true),
 });
 
+// ─── Requirements (structured job posting) ────────────────────────────────
+export const travelOptions = [
+  { value: "no_travel",   label: "No Travel" },
+  { value: "up_to_10",    label: "Up to 10%" },
+  { value: "up_to_25",    label: "Up to 25%" },
+  { value: "up_to_50",    label: "Up to 50%" },
+  { value: "up_to_75",    label: "Up to 75%" },
+  { value: "up_to_100",   label: "Up to 100%" },
+] as const;
+
+export const requirementSchema = z.object({
+  // Step 1 – Job Details
+  jobTitle:           z.string().min(1, "Job title is required"),
+  jobId:              z.string().optional(),
+  workSetting:        z.enum(["remote", "onsite", "hybrid"], { required_error: "Work setting is required" }),
+  hireType:           z.enum(["direct_hire", "contract"], { required_error: "Hire type is required" }),
+  positionType:       z.enum(["full_time", "part_time"], { required_error: "Position type is required" }),
+  payFrequency:       z.enum(["annual", "hourly"], { required_error: "Pay frequency is required" }),
+  payType:            z.enum(["range", "exact", "depends_on_experience"], { required_error: "Pay type is required" }),
+  payMin:             z.number().positive().optional(),
+  payMax:             z.number().positive().optional(),
+  payExact:           z.number().positive().optional(),
+  travelPercentage:   z.enum(["no_travel","up_to_10","up_to_25","up_to_50","up_to_75","up_to_100"]).default("no_travel"),
+  allowStaffingFirms: z.boolean().default(false),
+  sponsorship:        z.boolean().default(false),
+
+  // Step 2 – Description & Skills
+  jobDescription:     z.string().min(1, "Job description is required"),
+  skills:             z.array(z.string()).default([]),
+
+  // Step 3 – Contact Details
+  recipientEmails:    z.string().min(1, "At least one recipient email is required"),
+  ccEmails:           z.string().optional(),
+});
+
+export type RequirementInput = z.infer<typeof requirementSchema>;
+
 // ─── Hotlists ──────────────────────────────────────────────────────────────
 export const hotlistSchema = z.object({
   name: z.string().min(1, "Hotlist name is required"),

@@ -1,370 +1,546 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { campaignSchema, type CampaignInput } from "@/lib/schemas";
+import { requirementSchema, travelOptions, type RequirementInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { Users, Building2, Info, Plus, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, ChevronLeft, Send, Briefcase, MapPin, DollarSign, Users, Mail, Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface Hotlist { id: string; name: string; }
-interface PreviewCount { platform: number; myContacts: number; total: number; }
+// ── Step metadata ────────────────────────────────────────────────────────────
+const STEPS = [
+  { id: 1, label: "Job Details",           icon: Briefcase },
+  { id: 2, label: "Description & Skills",  icon: MapPin },
+  { id: 3, label: "Contact Details",       icon: Mail },
+  { id: 4, label: "Review & Send",         icon: Eye },
+];
 
-export default function NewCampaignPage() {
+const STEP_FIELDS: Record<number, (keyof RequirementInput)[]> = {
+  1: ["jobTitle", "workSetting", "hireType", "positionType", "payFrequency", "payType"],
+  2: ["jobDescription"],
+  3: ["recipientEmails"],
+};
+
+// ── Pill selector ─────────────────────────────────────────────────────────────
+function PillGroup<T extends string>({
+  options, value, onChange, cols = 3,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  cols?: number;
+}) {
+  return (
+    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "rounded-lg border-2 py-2 px-3 text-sm font-medium transition-colors",
+            value === o.value
+              ? "border-primary bg-primary/5 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex gap-3">
+      {[{ v: false, label: "No" }, { v: true, label: "Yes" }].map(({ v, label }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => onChange(v)}
+          className={cn(
+            "flex-1 rounded-lg border-2 py-2 text-sm font-medium transition-colors",
+            value === v
+              ? "border-primary bg-primary/5 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/40",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between py-2 border-b border-border last:border-0 text-sm">
+      <span className="text-muted-foreground font-medium w-[40%] shrink-0">{label}</span>
+      <span className="text-foreground font-semibold text-right">{value}</span>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function workSettingLabel(v: string) {
+  return { remote: "Remote", onsite: "On-Site", hybrid: "Hybrid" }[v] ?? v;
+}
+function hireTypeLabel(v: string) {
+  return { direct_hire: "Direct Hire", contract: "Contract" }[v] ?? v;
+}
+function positionTypeLabel(v: string) {
+  return { full_time: "Full Time", part_time: "Part Time" }[v] ?? v;
+}
+function payDisplay(d: RequirementInput): string {
+  const freq = d.payFrequency === "annual" ? "yr" : "hr";
+  if (d.payType === "depends_on_experience") return "Depends on Experience";
+  if (d.payType === "exact" && d.payExact) return `$${d.payExact.toLocaleString()} / ${freq}`;
+  if (d.payType === "range" && (d.payMin || d.payMax)) {
+    const min = d.payMin ? `$${d.payMin.toLocaleString()}` : "—";
+    const max = d.payMax ? `$${d.payMax.toLocaleString()}` : "—";
+    return `${min} – ${max} / ${freq}`;
+  }
+  return d.payFrequency === "annual" ? "Annual" : "Hourly";
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+export default function NewRequirementPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const user = session?.user as unknown as Record<string, string> | undefined;
-  const isAdmin = user?.role === "admin";
-  const operationMode = (user?.operationMode ?? "requirements") as "requirements" | "hotlist";
 
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
-    resolver: zodResolver(campaignSchema),
+  const [step, setStep]             = useState(1);
+  const [skillInput, setSkillInput] = useState("");
+  const [sending, setSending]       = useState(false);
+
+  const {
+    register, handleSubmit, watch, setValue, trigger,
+    formState: { errors },
+  } = useForm<RequirementInput>({
+    resolver: zodResolver(requirementSchema),
     defaultValues: {
-      targetType: operationMode === "hotlist" ? "hotlist" : "employer",
-      includeEmployerContacts: true,
+      workSetting:        "remote",
+      hireType:           "direct_hire",
+      positionType:       "full_time",
+      payFrequency:       "annual",
+      payType:            "range",
+      travelPercentage:   "no_travel",
+      allowStaffingFirms: false,
+      sponsorship:        false,
+      skills:             [],
+      jobDescription:     "",
     },
   });
 
-  const targetType = watch("targetType");
-  const hotlistId  = watch("hotlistId");
-  const includeEC  = watch("includeEmployerContacts");
+  const w = watch();
 
-  const [hotlists, setHotlists]             = useState<Hotlist[]>([]);
-  const [preview, setPreview]               = useState<PreviewCount | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [showAddContact, setShowAddContact] = useState(false);
-  const [addingContact, setAddingContact]   = useState(false);
-  const [newContact, setNewContact] = useState({ name: "", email: "", companyName: "" });
-
-  // Force correct targetType based on mode
-  useEffect(() => {
-    if (operationMode === "hotlist") {
-      setValue("targetType", "hotlist");
+  async function goNext() {
+    const fields = STEP_FIELDS[step];
+    if (fields) {
+      const ok = await trigger(fields);
+      if (!ok) return;
     }
-  }, [operationMode, setValue]);
+    setStep((s) => s + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  // Load hotlists for hotlist mode
-  useEffect(() => {
-    if (operationMode !== "hotlist" && !isAdmin) return;
-    fetch("/api/v1/hotlists")
-      .then((r) => r.ok ? r.json() : [])
-      .then((data: Hotlist[]) => setHotlists(data))
-      .catch(() => {});
-  }, [operationMode, isAdmin]);
+  function goBack() {
+    setStep((s) => s - 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  // Refresh recipient preview
-  useEffect(() => {
-    const params = new URLSearchParams({ targetType, includeEC: String(includeEC ?? true) });
-    if (hotlistId) params.set("hotlistId", hotlistId);
-    setPreviewLoading(true);
-    fetch(`/api/v1/campaigns/preview-recipients?${params}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then(setPreview)
-      .catch(() => setPreview(null))
-      .finally(() => setPreviewLoading(false));
-  }, [targetType, hotlistId, includeEC]);
+  function addSkill() {
+    const trimmed = skillInput.trim();
+    if (!trimmed) return;
+    const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    const current = w.skills ?? [];
+    setValue("skills", [...new Set([...current, ...parts])]);
+    setSkillInput("");
+  }
 
-  async function handleAddContact() {
-    if (!newContact.name || !newContact.email) { toast.error("Name and email are required"); return; }
-    setAddingContact(true);
+  function removeSkill(idx: number) {
+    setValue("skills", (w.skills ?? []).filter((_, i) => i !== idx));
+  }
+
+  const onSubmit = handleSubmit(async (data) => {
+    setSending(true);
     try {
-      const res = await fetch("/api/v1/employer-contacts", {
+      const res = await fetch("/api/v1/requirements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newContact),
+        body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to add contact");
-      toast.success(`${newContact.name} added to My Contacts`);
-      setNewContact({ name: "", email: "", companyName: "" });
-      setShowAddContact(false);
-      const params = new URLSearchParams({ targetType, includeEC: "true" });
-      const updated = await fetch(`/api/v1/campaigns/preview-recipients?${params}`).then((r) => r.json());
-      setPreview(updated);
-      setValue("includeEmployerContacts", true);
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Failed to send requirement"); return; }
+      toast.success("Requirement sent successfully!");
+      router.push(`/campaigns/${json.campaignId}`);
     } catch {
-      toast.error("Failed to add contact");
+      toast.error("Something went wrong. Please try again.");
     } finally {
-      setAddingContact(false);
+      setSending(false);
     }
-  }
+  });
 
-  async function onSubmit(data: CampaignInput) {
-    const res = await fetch("/api/v1/campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) { toast.error("Failed to create"); return; }
-    const campaign = await res.json();
-    toast.success(operationMode === "hotlist" ? "Hotlist email created as draft" : "Requirement created as draft");
-    router.push(`/campaigns/${campaign.id}`);
-  }
+  // ── Stepper ────────────────────────────────────────────────────────────────
+  const StepperHeader = () => (
+    <div className="flex items-start gap-0 mb-8">
+      {STEPS.map((s, idx) => {
+        const done   = step > s.id;
+        const active = step === s.id;
+        const Icon   = s.icon;
+        return (
+          <div key={s.id} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors shrink-0",
+                done   ? "bg-primary border-primary text-white"
+                       : active ? "bg-primary/10 border-primary text-primary"
+                                : "bg-white border-border text-muted-foreground",
+              )}>
+                {done ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
+              </div>
+              <span className={cn(
+                "text-xs font-medium hidden sm:block whitespace-nowrap text-center",
+                active ? "text-primary" : done ? "text-primary/70" : "text-muted-foreground",
+              )}>
+                {s.label}
+              </span>
+            </div>
+            {idx < STEPS.length - 1 && (
+              <div className={cn("flex-1 h-0.5 mx-2 mt-[-14px]", done ? "bg-primary" : "bg-border")} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
-  const recipientSummary = () => {
-    if (previewLoading) return "Counting recipients…";
-    if (!preview) return null;
-    if (preview.total === 0) return "⚠ No recipients found for this selection";
-    if (targetType === "hotlist") return `${preview.platform} hotlist entries`;
-    const parts: string[] = [];
-    if (preview.platform > 0) parts.push(`${preview.platform} contacts`);
-    if (preview.myContacts > 0) parts.push(`${preview.myContacts} from My Contacts`);
-    return `${preview.total} recipient${preview.total === 1 ? "" : "s"} — ${parts.join(" + ")}`;
-  };
+  const NavButtons = ({ onNext, nextLabel = "Continue", isSubmit = false }: {
+    onNext?: () => void; nextLabel?: string; isSubmit?: boolean;
+  }) => (
+    <div className="flex justify-between pt-6 border-t border-border mt-8">
+      {step > 1 ? (
+        <Button type="button" variant="outline" onClick={goBack} className="gap-2">
+          <ChevronLeft className="w-4 h-4" /> Back
+        </Button>
+      ) : (
+        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+      )}
+      {isSubmit ? (
+        <Button type="submit" disabled={sending} className="gap-2">
+          {sending ? "Sending…" : <><Send className="w-4 h-4" /> Send Requirement</>}
+        </Button>
+      ) : (
+        <Button type="button" onClick={onNext} className="gap-2">
+          {nextLabel} <ChevronRight className="w-4 h-4" />
+        </Button>
+      )}
+    </div>
+  );
 
-  const isHotlistMode = operationMode === "hotlist" || isAdmin;
-  const isRequirementsMode = operationMode === "requirements" || isAdmin;
+  const Section = ({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) => (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        {desc && <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>}
+      </div>
+      {children}
+    </div>
+  );
 
+  const Field = ({ label, error, children, hint }: {
+    label: string; error?: string; children: React.ReactNode; hint?: string;
+  }) => (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {hint  && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+
+  // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-6 sm:p-8 max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">
-          {operationMode === "hotlist" ? "New Hotlist Email" : "New Requirement"}
-        </h1>
-        <p className="text-muted-foreground">
-          {operationMode === "hotlist"
-            ? "Send a formatted bench list to your employer contacts"
-            : "Send a job requirement to your recruiter network"}
-        </p>
+        <h1 className="text-2xl font-bold">New Requirement</h1>
+        <p className="text-muted-foreground text-sm mt-1">Fill in the job details and send to your recruiter network.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{operationMode === "hotlist" ? "Email Details" : "Requirement Details"}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>{operationMode === "hotlist" ? "Name (internal)" : "Requirement Name (internal)"}</Label>
-              <Input
-                {...register("name")}
-                placeholder={operationMode === "hotlist" ? "Java Bench — May 2026" : "Q1 Java Requirements — Dallas"}
-              />
-              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+      <StepperHeader />
+
+      <form onSubmit={onSubmit} className="bg-white border border-border rounded-xl p-6 shadow-sm">
+
+        {/* ══ STEP 1 ══════════════════════════════════════════════════════ */}
+        {step === 1 && (
+          <div className="space-y-8">
+            <Section title="Job Details">
+              <Field label="Job Title *" error={errors.jobTitle?.message}>
+                <Input {...register("jobTitle")} placeholder="e.g. Senior Java Developer" />
+              </Field>
+              <Field label="Job ID" hint="Leave blank to auto-generate on submission." error={errors.jobId?.message}>
+                <Input {...register("jobId")} placeholder="e.g. JD-2026-001 (optional)" />
+              </Field>
+            </Section>
+
+            <div className="border-t border-border pt-6">
+              <Section title="Location" desc="Specify the preferred work setting.">
+                <Field label="Work Setting *" error={errors.workSetting?.message}>
+                  <PillGroup
+                    options={[
+                      { value: "remote" as const,  label: "Remote" },
+                      { value: "onsite" as const,  label: "On-Site" },
+                      { value: "hybrid" as const,  label: "Hybrid" },
+                    ]}
+                    value={w.workSetting}
+                    onChange={(v) => setValue("workSetting", v)}
+                    cols={3}
+                  />
+                </Field>
+              </Section>
             </div>
-            <div className="space-y-2">
-              <Label>Email Subject Line</Label>
-              <Input
-                {...register("subject")}
-                placeholder={
-                  operationMode === "hotlist"
-                    ? "Available Java / Spring Boot Consultants — Bench List"
-                    : "New Java/Spring Boot Requirement — Dallas TX (C2C)"
-                }
-              />
-              {errors.subject && <p className="text-xs text-destructive">{errors.subject.message}</p>}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Body */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Body</CardTitle>
-            <CardDescription>
-              {operationMode === "hotlist"
-                ? "Write your intro note. The hotlist candidate table is appended automatically."
-                : "Describe the requirement. Use {{name}} to personalise each email."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RichTextEditor
-              value={watch("bodyHtml") ?? ""}
-              onChange={(html) => setValue("bodyHtml", html, { shouldValidate: true })}
-              placeholder={
-                operationMode === "hotlist"
-                  ? "Hi {{name}}, please find our available bench candidates below. Let us know if any match your current openings."
-                  : "Hi {{name}}, we have a new Java Developer requirement in Dallas TX (C2C/W2, 6 months). Please reach out if you have matching profiles."
-              }
-            />
-            {errors.bodyHtml && <p className="text-xs text-destructive mt-2">{errors.bodyHtml.message}</p>}
-          </CardContent>
-        </Card>
+            <div className="border-t border-border pt-6">
+              <Section title="Employment Information">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <Field label="Hire Type *" error={errors.hireType?.message}>
+                    <PillGroup
+                      options={[
+                        { value: "direct_hire" as const, label: "Direct Hire" },
+                        { value: "contract" as const,    label: "Contract" },
+                      ]}
+                      value={w.hireType}
+                      onChange={(v) => setValue("hireType", v)}
+                      cols={2}
+                    />
+                  </Field>
+                  <Field label="Position Type *" error={errors.positionType?.message}>
+                    <PillGroup
+                      options={[
+                        { value: "full_time" as const, label: "Full Time" },
+                        { value: "part_time" as const, label: "Part Time" },
+                      ]}
+                      value={w.positionType}
+                      onChange={(v) => setValue("positionType", v)}
+                      cols={2}
+                    />
+                  </Field>
+                </div>
 
-        {/* Targeting */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Targeting</CardTitle>
-            <CardDescription>
-              {operationMode === "hotlist"
-                ? "Select which hotlist to send — it will be emailed to your employer contacts"
-                : "Choose which contacts will receive this requirement"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+                <Field label="Pay *" error={errors.payFrequency?.message}>
+                  <PillGroup
+                    options={[
+                      { value: "annual" as const, label: "Annual" },
+                      { value: "hourly" as const, label: "Hourly" },
+                    ]}
+                    value={w.payFrequency}
+                    onChange={(v) => setValue("payFrequency", v)}
+                    cols={2}
+                  />
+                </Field>
 
-            {/* ── HOTLIST MODE ── */}
-            {operationMode === "hotlist" && (
-              <div className="space-y-2">
-                <Label>Select Hotlist <span className="text-destructive">*</span></Label>
-                {hotlists.length === 0 ? (
-                  <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
-                    No hotlists yet. <a href="/hotlists" className="underline text-primary">Create a hotlist first.</a>
-                  </p>
-                ) : (
+                <Field label="Pay Type *" error={errors.payType?.message}>
+                  <PillGroup
+                    options={[
+                      { value: "range" as const,                label: "Range" },
+                      { value: "exact" as const,                label: "Exact" },
+                      { value: "depends_on_experience" as const, label: "Depends on Experience" },
+                    ]}
+                    value={w.payType}
+                    onChange={(v) => setValue("payType", v)}
+                    cols={3}
+                  />
+                </Field>
+
+                {w.payType === "range" && (
+                  <Field label={`Pay Range (USD) — ${w.payFrequency === "annual" ? "Annual" : "Hourly"}`}>
+                    <div className="flex items-center gap-3">
+                      <Input type="number" placeholder="Min" {...register("payMin", { valueAsNumber: true })} className="flex-1" />
+                      <span className="text-muted-foreground font-medium">–</span>
+                      <Input type="number" placeholder="Max" {...register("payMax", { valueAsNumber: true })} className="flex-1" />
+                    </div>
+                  </Field>
+                )}
+
+                {w.payType === "exact" && (
+                  <Field label={`Exact Pay (USD) — ${w.payFrequency === "annual" ? "Annual" : "Hourly"}`}>
+                    <Input type="number" placeholder="e.g. 120000" {...register("payExact", { valueAsNumber: true })} />
+                  </Field>
+                )}
+
+                <Field label="Travel Percentage *">
                   <select
-                    {...register("hotlistId")}
+                    {...register("travelPercentage")}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                    defaultValue=""
                   >
-                    <option value="" disabled>— choose a hotlist —</option>
-                    {hotlists.map((h) => (
-                      <option key={h.id} value={h.id}>{h.name}</option>
+                    {travelOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
-                )}
-                <input type="hidden" {...register("targetType")} value="hotlist" />
-                <p className="text-xs text-muted-foreground">
-                  The candidate table will be sent to your <strong>employer contacts</strong>.
-                </p>
-              </div>
-            )}
+                </Field>
 
-            {/* ── REQUIREMENTS MODE ── */}
-            {operationMode === "requirements" && (
-              <>
-                <div>
-                  <Label className="mb-2 block">Target Audience</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {([
-                      { value: "employer",  label: "Employer Contacts", icon: Building2 },
-                      { value: "candidate", label: "Candidate Contacts", icon: Users },
-                    ] as const).map(({ value, label, icon: Icon }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => { setValue("targetType", value); setValue("hotlistId", undefined); }}
-                        className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-colors
-                          ${targetType === value
-                            ? "border-primary bg-primary/5 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                          }`}
-                      >
-                        <Icon className="h-5 w-5" />
-                        {label}
-                      </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <Field label="Allow Staffing Firms & Recruiters to apply on behalf of a candidate">
+                    <YesNo value={w.allowStaffingFirms} onChange={(v) => setValue("allowStaffingFirms", v)} />
+                  </Field>
+                  <Field label="Ability or willingness to provide sponsorship">
+                    <YesNo value={w.sponsorship} onChange={(v) => setValue("sponsorship", v)} />
+                  </Field>
+                </div>
+              </Section>
+            </div>
+
+            <NavButtons onNext={goNext} />
+          </div>
+        )}
+
+        {/* ══ STEP 2 ══════════════════════════════════════════════════════ */}
+        {step === 2 && (
+          <div className="space-y-8">
+            <Section title="Description & Skills" desc="Describe the role in detail. Clear descriptions attract better-matching candidates.">
+              <Field label="Job Description *" error={errors.jobDescription?.message}>
+                <RichTextEditor
+                  value={w.jobDescription ?? ""}
+                  onChange={(html) => setValue("jobDescription", html, { shouldValidate: true })}
+                  placeholder="Describe the role, responsibilities, and requirements..."
+                />
+              </Field>
+
+              <div className="space-y-3">
+                <Label>Required Skills</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={skillInput}
+                    onChange={(e) => setSkillInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }}
+                    placeholder="e.g. Java, Spring Boot, AWS"
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" onClick={addSkill}>Add</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Enter skills separated by commas, or add one at a time.</p>
+                {(w.skills ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {(w.skills ?? []).map((skill, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full">
+                        {skill}
+                        <button type="button" onClick={() => removeSkill(idx)} className="hover:text-destructive transition-colors leading-none text-sm">×</button>
+                      </span>
                     ))}
                   </div>
-                  <input type="hidden" {...register("targetType")} />
-                </div>
+                )}
+              </div>
+            </Section>
 
-                {targetType === "employer" && (
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3 border">
-                      <input
-                        type="checkbox"
-                        {...register("includeEmployerContacts")}
-                        id="includeEC"
-                        className="mt-0.5 h-4 w-4"
-                        defaultChecked
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="includeEC" className="text-sm font-medium cursor-pointer">
-                          Include My Contacts
-                        </label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Merge your private employer contacts. Duplicates removed automatically.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddContact((v) => !v)}
-                        className="flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
-                      >
-                        {showAddContact ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                        {showAddContact ? "Cancel" : "Add contact"}
-                      </button>
+            <NavButtons onNext={goNext} />
+          </div>
+        )}
+
+        {/* ══ STEP 3 ══════════════════════════════════════════════════════ */}
+        {step === 3 && (
+          <div className="space-y-8">
+            <Section title="Contact Details" desc="Enter the email addresses that will receive this requirement.">
+              <Field
+                label="To (Recipient Emails) *"
+                hint="Separate multiple addresses with commas. e.g. recruiter@firm.com, vendor@agency.com"
+                error={errors.recipientEmails?.message}
+              >
+                <Input {...register("recipientEmails")} placeholder="recruiter@firm.com, vendor@agency.com" />
+              </Field>
+              <Field
+                label="CC Email(s)"
+                hint="Optional. Comma-separated addresses to CC on every email sent."
+                error={errors.ccEmails?.message}
+              >
+                <Input {...register("ccEmails")} placeholder="manager@company.com (optional)" />
+              </Field>
+            </Section>
+
+            <NavButtons onNext={goNext} nextLabel="Review" />
+          </div>
+        )}
+
+        {/* ══ STEP 4 ══════════════════════════════════════════════════════ */}
+        {step === 4 && (
+          <div className="space-y-8">
+            <Section title="Review & Send" desc="Confirm everything looks right before sending. Emails are dispatched immediately.">
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="bg-muted/40 px-4 py-2.5 border-b border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5" /> Job Details
+                  </p>
+                </div>
+                <div className="px-4 py-1">
+                  <ReviewRow label="Job Title"      value={w.jobTitle ?? "—"} />
+                  {w.jobId && <ReviewRow label="Job ID"       value={w.jobId} />}
+                  <ReviewRow label="Work Setting"   value={workSettingLabel(w.workSetting)} />
+                  <ReviewRow label="Hire Type"      value={hireTypeLabel(w.hireType)} />
+                  <ReviewRow label="Position Type"  value={positionTypeLabel(w.positionType)} />
+                  <ReviewRow label="Compensation"   value={payDisplay(w)} />
+                  <ReviewRow label="Travel"         value={travelOptions.find((t) => t.value === w.travelPercentage)?.label ?? "—"} />
+                  <ReviewRow label="Staffing Firms" value={w.allowStaffingFirms ? "Allowed" : "Not allowed"} />
+                  <ReviewRow label="Sponsorship"    value={w.sponsorship ? "Available" : "Not available"} />
+                </div>
+              </div>
+
+              {(w.skills ?? []).length > 0 && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="bg-muted/40 px-4 py-2.5 border-b border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Required Skills</p>
+                  </div>
+                  <div className="px-4 py-3 flex flex-wrap gap-2">
+                    {(w.skills ?? []).map((s, i) => (
+                      <span key={i} className="bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="bg-muted/40 px-4 py-2.5 border-b border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" /> Recipients
+                  </p>
+                </div>
+                <div className="px-4 py-3 space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase">To:</span>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {w.recipientEmails?.split(",").map((e) => e.trim()).filter(Boolean).map((email, i) => (
+                        <span key={i} className="bg-muted text-foreground text-xs px-2.5 py-1 rounded-md font-mono">{email}</span>
+                      ))}
                     </div>
-
-                    {showAddContact && (
-                      <div className="rounded-lg border border-dashed bg-muted/30 p-4 space-y-3">
-                        <p className="text-sm font-medium">Quick-add to My Contacts</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs">Name *</Label>
-                            <Input value={newContact.name} onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))} placeholder="John Smith" className="h-8 text-sm" />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Email *</Label>
-                            <Input type="email" value={newContact.email} onChange={(e) => setNewContact((p) => ({ ...p, email: e.target.value }))} placeholder="john@company.com" className="h-8 text-sm" />
-                          </div>
-                          <div className="space-y-1 col-span-2">
-                            <Label className="text-xs">Company</Label>
-                            <Input value={newContact.companyName} onChange={(e) => setNewContact((p) => ({ ...p, companyName: e.target.value }))} placeholder="Acme Corp" className="h-8 text-sm" />
-                          </div>
-                        </div>
-                        <Button type="button" size="sm" onClick={handleAddContact} disabled={addingContact}>
-                          {addingContact ? "Adding…" : "Add to My Contacts"}
-                        </Button>
+                  </div>
+                  {w.ccEmails && (
+                    <div>
+                      <span className="text-muted-foreground text-xs font-semibold uppercase">CC:</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {w.ccEmails.split(",").map((e) => e.trim()).filter(Boolean).map((email, i) => (
+                          <span key={i} className="bg-muted text-foreground text-xs px-2.5 py-1 rounded-md font-mono">{email}</span>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ── ADMIN: full targeting picker ── */}
-            {isAdmin && (
-              <div>
-                <Label className="mb-2 block">Target Audience (Admin Override)</Label>
-                <div className="grid grid-cols-3 gap-3">
-                  {([
-                    { value: "employer",  label: "Employer Contacts", icon: Building2 },
-                    { value: "candidate", label: "Candidate Contacts", icon: Users },
-                    { value: "hotlist",   label: "Specific Hotlist", icon: Info },
-                  ] as const).map(({ value, label, icon: Icon }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => { setValue("targetType", value); setValue("hotlistId", undefined); }}
-                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-colors
-                        ${targetType === value ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {label}
-                    </button>
-                  ))}
+                    </div>
+                  )}
                 </div>
-                <input type="hidden" {...register("targetType")} />
-                {targetType === "hotlist" && (
-                  <div className="mt-3">
-                    <select {...register("hotlistId")} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" defaultValue="">
-                      <option value="" disabled>— choose a hotlist —</option>
-                      {hotlists.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                    </select>
-                  </div>
-                )}
               </div>
-            )}
 
-            {/* Recipient count */}
-            {recipientSummary() && (
-              <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${
-                preview?.total === 0 ? "bg-destructive/10 text-destructive" : "bg-emerald-50 text-emerald-700"
-              }`}>
-                <Info className="h-4 w-4 shrink-0" />
-                {recipientSummary()}
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                <strong>Ready to send?</strong> Click "Send Requirement" — emails will be dispatched immediately to all recipients listed above.
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </Section>
 
-        <div className="flex gap-3">
-          <Button
-            type="submit"
-            disabled={isSubmitting || (operationMode === "hotlist" && !hotlistId && !isAdmin)}
-          >
-            {isSubmitting ? "Saving..." : "Save as Draft"}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-        </div>
+            <NavButtons isSubmit />
+          </div>
+        )}
+
       </form>
     </div>
   );
