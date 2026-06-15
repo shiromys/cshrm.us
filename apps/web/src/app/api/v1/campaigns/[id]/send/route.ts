@@ -17,7 +17,9 @@ export async function POST(
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const userRecord = await db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, user.id) });
-    if (!userRecord || userRecord.tier === "free") {
+    if (!userRecord) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const isAdmin = userRecord.role === "admin";
+    if (!isAdmin && userRecord.tier === "free") {
       return NextResponse.json({ error: "Standard subscription required to send campaigns" }, { status: 403 });
     }
 
