@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
     const fromName     = `${userRecord.name ?? "CloudSourceHRM"} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
 
+    // ── AhaSend anti-phishing guard ───────────────────────────────────────────
+    // Strip any To recipient whose email matches the Reply-To.
+    // AhaSend flags/suspends accounts when Reply-To === To (phishing pattern).
+    const replyToLower = replyToEmail.toLowerCase();
+    const safeToEmails = toEmails.filter((e) => e.toLowerCase() !== replyToLower);
+    if (safeToEmails.length < toEmails.length) {
+      console.warn(`[requirements/send] Stripped ${toEmails.length - safeToEmails.length} recipient(s) matching Reply-To (${replyToEmail}) to comply with anti-phishing rules.`);
+    }
+    if (safeToEmails.length === 0) {
+      return NextResponse.json({ error: "All recipient emails matched the sender's Reply-To address. Please use different recipient addresses." }, { status: 400 });
+    }
+
     // Create campaign record (stores structured data for future reference)
     const [campaign] = await db.insert(campaigns).values({
       userId:                  user.id,
@@ -80,7 +92,7 @@ export async function POST(request: NextRequest) {
       bodyText:                text,
       status:                  "sending",
       targetType:              "employer",
-      totalRecipients:         toEmails.length,
+      totalRecipients:         safeToEmails.length,
       targetFilters: {
         isRequirement:   true,
         requirementMeta: data,
@@ -97,9 +109,9 @@ export async function POST(request: NextRequest) {
       DO UPDATE SET count = usage_counters.count + 1, updated_at = now()
     `);
 
-    // Create email log records for each To recipient
+    // Create email log records for each safe To recipient
     const logRecords: Array<{ logId: string; email: string }> = [];
-    for (const email of toEmails) {
+    for (const email of safeToEmails) {
       const [log] = await db.insert(emailLogs).values({
         campaignId:    campaign.id,
         userId:        user.id,

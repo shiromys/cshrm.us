@@ -23,6 +23,9 @@ export async function POST(
       return NextResponse.json({ error: "Standard subscription required to send campaigns" }, { status: 403 });
     }
 
+    // Compute reply-to early so we can guard against Reply-To === To (AhaSend anti-phishing rule)
+    const replyToEmail = (userRecord.replyToEmail ?? userRecord.email).toLowerCase();
+
     const campaign = await db.query.campaigns.findFirst({
       where: (c, { and, eq, isNull }) => and(eq(c.id, id), eq(c.userId, user.id), isNull(c.deletedAt)),
     });
@@ -75,6 +78,16 @@ export async function POST(
       }
     }
 
+    // ── AhaSend anti-phishing guard ───────────────────────────────────────────
+    // AhaSend (and most bulk providers) flag/suspend accounts when Reply-To === To.
+    // This pattern matches phishing emails, so we must strip any recipient whose
+    // email address matches the sender's Reply-To before sending.
+    const beforeGuard = recipients.length;
+    recipients = recipients.filter((r) => r.email.toLowerCase() !== replyToEmail);
+    if (recipients.length < beforeGuard) {
+      console.warn(`[campaign/send] Stripped ${beforeGuard - recipients.length} recipient(s) whose email matched the Reply-To (${replyToEmail}) to comply with anti-phishing rules.`);
+    }
+
     if (recipients.length === 0) {
       const hint = campaign.targetType === "employer"
         ? "No active recipients found. Upload contacts to My Contacts (make sure 'Include My Contacts' is checked) or ask your admin to add Platform Contacts."
@@ -102,10 +115,6 @@ export async function POST(
     const hasResend = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
 
     const fromName = `${userRecord.name} via CloudSourceHRM`;
-    // Reply-To is the recruiter's own address so recipient replies land in their inbox.
-    // The From address (info@cloudsourcehrm.us) never receives replies — email clients
-    // always honour Reply-To over From when the recipient hits Reply.
-    const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
     // AhaSend campaigns go from info@cloudsourcehrm.us; transactional Resend uses no-reply@
     const fromAddress = hasAhaSend
       ? (process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us")
