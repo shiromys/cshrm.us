@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Plus, ClipboardPaste, Eye, Pencil, Trash2, Check, X } from "lucide-react";
+import { Upload, Plus, ClipboardPaste, Eye, Pencil, Trash2, Check, X, Send } from "lucide-react";
 
 type TabType = "form" | "excel" | "paste" | "preview";
 
@@ -42,6 +42,14 @@ export default function HotlistDetailPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<HotlistEntry>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Send dialog state
+  const [showSendDialog, setShowSendDialog]     = useState(false);
+  const [sendIncludeContacts, setSendInclude]   = useState(true);
+  const [sendManualEmails, setSendManualEmails] = useState("");
+  const [sendSubject, setSendSubject]           = useState("");
+  const [sendIntroNote, setSendIntroNote]       = useState("");
+  const [sending, setSending]                   = useState(false);
 
   const { data: hotlist, isLoading } = useQuery({
     queryKey: ["hotlists", id],
@@ -142,6 +150,33 @@ export default function HotlistDetailPage() {
     qc.invalidateQueries({ queryKey: ["hotlist-entries", id] });
   }
 
+  async function sendHotlist() {
+    setSending(true);
+    try {
+      const res = await fetch(`/api/v1/hotlists/${id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          includeMyContacts: sendIncludeContacts,
+          manualEmails: sendManualEmails,
+          subject: sendSubject || undefined,
+          introNote: sendIntroNote,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Failed to send hotlist"); return; }
+      toast.success(`Hotlist sent to ${data.recipients} recipient${data.recipients !== 1 ? "s" : ""}!`);
+      setShowSendDialog(false);
+      setSendManualEmails("");
+      setSendIntroNote("");
+      qc.invalidateQueries({ queryKey: ["hotlists", id] });
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   if (isLoading) return <div className="p-8 text-muted-foreground">Loading...</div>;
 
   return (
@@ -151,7 +186,12 @@ export default function HotlistDetailPage() {
           <h1 className="text-2xl font-bold">{hotlist?.name ?? "Hotlist"}</h1>
           <p className="text-muted-foreground">{entries.length} candidate{entries.length !== 1 ? "s" : ""} &bull; {hotlist?.visibleColumns?.join(", ")}</p>
         </div>
-        <Button variant="outline" onClick={loadPreview}><Eye className="w-4 h-4 mr-2" />Preview Table</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadPreview}><Eye className="w-4 h-4 mr-2" />Preview Table</Button>
+          <Button onClick={() => { setSendSubject(hotlist?.emailSubject ?? `Available Candidates: ${hotlist?.name ?? ""}`); setShowSendDialog(true); }} disabled={entries.length === 0}>
+            <Send className="w-4 h-4 mr-2" />Send Hotlist
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -327,6 +367,105 @@ export default function HotlistDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Send Hotlist Dialog ─────────────────────────────────────────── */}
+      {showSendDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold">Send Hotlist</h2>
+                <p className="text-sm text-muted-foreground">{hotlist?.name} · {entries.length} candidate{entries.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => setShowSendDialog(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-5">
+
+              {/* Recipients */}
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Recipients</p>
+                <label className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={sendIncludeContacts}
+                    onChange={(e) => setSendInclude(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">My Contacts (Employer Contacts)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Send to all active employer contacts in your account</p>
+                  </div>
+                </label>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Additional / Manual Emails</label>
+                  <input
+                    type="text"
+                    value={sendManualEmails}
+                    onChange={(e) => setSendManualEmails(e.target.value)}
+                    placeholder="recruiter@company.com, hr@firm.com"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated. Combined with My Contacts, duplicates removed.</p>
+                </div>
+              </div>
+
+              {/* Subject */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Email Subject</label>
+                <input
+                  type="text"
+                  value={sendSubject}
+                  onChange={(e) => setSendSubject(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                />
+              </div>
+
+              {/* Intro note */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Intro Note <span className="text-muted-foreground font-normal">(optional)</span></label>
+                <textarea
+                  value={sendIntroNote}
+                  onChange={(e) => setSendIntroNote(e.target.value)}
+                  rows={3}
+                  placeholder="Hi, please find our available bench candidates below. Let us know if any match your current openings."
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm resize-none"
+                />
+                <p className="text-xs text-muted-foreground">This appears above the candidate table in the email.</p>
+              </div>
+
+              {!sendIncludeContacts && !sendManualEmails.trim() && (
+                <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                  Please select My Contacts or enter at least one manual email address.
+                </p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                onClick={() => setShowSendDialog(false)}
+                className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendHotlist}
+                disabled={sending || (!sendIncludeContacts && !sendManualEmails.trim())}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                {sending ? "Sending…" : "Send Now"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

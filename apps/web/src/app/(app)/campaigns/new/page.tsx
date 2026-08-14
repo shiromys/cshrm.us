@@ -207,9 +207,11 @@ function NavButtons({
 export default function NewRequirementPage() {
   const router = useRouter();
 
-  const [step, setStep]             = useState(1);
-  const [skillInput, setSkillInput] = useState("");
-  const [sending, setSending]       = useState(false);
+  const [step, setStep]               = useState(1);
+  const [skillInput, setSkillInput]   = useState("");
+  const [sending, setSending]         = useState(false);
+  const [suggestedSkills, setSuggested] = useState<string[]>([]);
+  const [suggesting, setSuggesting]   = useState(false);
 
   const {
     register, handleSubmit, watch, setValue, trigger,
@@ -262,6 +264,39 @@ export default function NewRequirementPage() {
 
   function removeSkill(idx: number) {
     setValue("skills", (w.skills ?? []).filter((_, i) => i !== idx));
+  }
+
+  async function suggestSkills() {
+    const html = w.jobDescription;
+    if (!html || html.replace(/<[^>]+>/g, "").trim().length < 30) {
+      toast.error("Please write the job description first.");
+      return;
+    }
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/v1/requirements/suggest-skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bodyHtml: html }),
+      });
+      const json = await res.json();
+      const current = new Set((w.skills ?? []).map((s) => s.toLowerCase()));
+      const fresh = (json.skills as string[]).filter((s) => !current.has(s.toLowerCase()));
+      setSuggested(fresh);
+      if (fresh.length === 0) toast.info("No additional skills detected. Try adding them manually.");
+    } catch {
+      toast.error("Could not suggest skills.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function addSuggestedSkill(skill: string) {
+    const current = w.skills ?? [];
+    if (!current.map((s) => s.toLowerCase()).includes(skill.toLowerCase())) {
+      setValue("skills", [...current, skill]);
+    }
+    setSuggested((prev) => prev.filter((s) => s !== skill));
   }
 
   const onSubmit = handleSubmit(async (data) => {
@@ -429,8 +464,42 @@ export default function NewRequirementPage() {
                 />
               </Field>
 
+              {/* ── Skill Suggestions ── */}
               <div className="space-y-3">
-                <Label>Required Skills</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Required Skills</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={suggestSkills}
+                    disabled={suggesting}
+                    className="text-xs gap-1.5"
+                  >
+                    {suggesting ? "Analysing…" : "✦ Suggest Skills from JD"}
+                  </Button>
+                </div>
+
+                {/* Suggestions row */}
+                {suggestedSkills.length > 0 && (
+                  <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-indigo-700">Click to add suggested skills:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedSkills.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => addSuggestedSkill(s)}
+                          className="inline-flex items-center gap-1 bg-white border border-indigo-300 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full hover:bg-indigo-100 transition-colors"
+                        >
+                          + {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual add */}
                 <div className="flex gap-2">
                   <Input
                     value={skillInput}
@@ -442,6 +511,8 @@ export default function NewRequirementPage() {
                   <Button type="button" variant="outline" onClick={addSkill}>Add</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Enter skills separated by commas, or add one at a time.</p>
+
+                {/* Added skills */}
                 {(w.skills ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {(w.skills ?? []).map((skill, idx) => (
@@ -517,6 +588,26 @@ export default function NewRequirementPage() {
                       <span key={i} className="bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full">{s}</span>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Full JD preview */}
+              {w.jobDescription && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="bg-muted/40 px-4 py-2.5 border-b border-border flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Job Description</p>
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <div
+                    className="px-4 py-3 prose prose-sm max-w-none text-sm text-foreground"
+                    dangerouslySetInnerHTML={{ __html: w.jobDescription }}
+                  />
                 </div>
               )}
 
