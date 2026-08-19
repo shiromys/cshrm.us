@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { requirementSchema, travelOptions, type RequirementInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -206,6 +207,8 @@ function NavButtons({
 // ════════════════════════════════════════════════════════════════════════════
 export default function NewRequirementPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userEmail = (session?.user?.email ?? "").toLowerCase();
 
   const [step, setStep]               = useState(1);
   const [skillInput, setSkillInput]   = useState("");
@@ -240,6 +243,21 @@ export default function NewRequirementPage() {
       const ok = await trigger(fields);
       if (!ok) return;
     }
+
+    // Step 3: block the user's own email as a recipient (AhaSend anti-phishing)
+    if (step === 3 && userEmail) {
+      const toList = (w.recipientEmails ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+      const ccList = (w.ccEmails ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+      const allRecipients = [...toList, ...ccList];
+      if (allRecipients.includes(userEmail)) {
+        toast.error(
+          "You cannot send to your own account email address. Please use a different recipient.",
+          { duration: 6000 }
+        );
+        return;
+      }
+    }
+
     setStep((s) => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
