@@ -340,7 +340,7 @@ export default function NewRequirementPage() {
     <div className="p-6 sm:p-8 max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">New Requirement</h1>
-        <p className="text-muted-foreground text-sm mt-1">Fill in the job details and send to your recruiter network.</p>
+        <p className="text-muted-foreground text-sm mt-1">Send a structured job requirement to your recruiter network.</p>
       </div>
 
       <StepperHeader step={step} />
@@ -354,7 +354,7 @@ export default function NewRequirementPage() {
               <Field label="Job Title *" error={errors.jobTitle?.message}>
                 <Input {...register("jobTitle")} placeholder="e.g. Senior Java Developer" />
               </Field>
-              <Field label="Job ID" hint="Leave blank to auto-generate on submission." error={errors.jobId?.message}>
+              <Field label="Job ID" hint="Auto-generated if left blank." error={errors.jobId?.message}>
                 <Input {...register("jobId")} placeholder="e.g. JD-2026-001 (optional)" />
               </Field>
             </Section>
@@ -479,6 +479,8 @@ export default function NewRequirementPage() {
                   value={w.jobDescription ?? ""}
                   onChange={(html) => setValue("jobDescription", html, { shouldValidate: true })}
                   placeholder="Describe the role, responsibilities, and requirements..."
+                  minHeight={480}
+                  showTokens={false}
                 />
               </Field>
 

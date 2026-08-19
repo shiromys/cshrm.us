@@ -11,6 +11,7 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: number;
+  showTokens?: boolean;  // show personalisation token buttons (default true)
 }
 
 type FormatCommand =
@@ -23,6 +24,7 @@ export function RichTextEditor({
   onChange,
   placeholder = "Write your email here…",
   minHeight = 280,
+  showTokens = true,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const isInternalUpdate = useRef(false);
@@ -107,27 +109,30 @@ export function RichTextEditor({
           <LinkIcon className="w-3.5 h-3.5" />
         </ToolbarButton>
 
-        <Divider />
-
-        {/* Personalisation tokens */}
-        <span className="text-xs text-muted-foreground pl-1 pr-0.5">Insert:</span>
-        {[
-          { token: "{{first_name}}", label: "First name",   tip: "Inserts recipient's first name — e.g. \"James\"" },
-          { token: "{{name}}",       label: "Full name",    tip: "Inserts recipient's full name — e.g. \"James Carter\"" },
-          { token: "{{company}}",    label: "Company",      tip: "Inserts recipient's company name — blank if unknown" },
-          { token: "{{email}}",      label: "Email",        tip: "Inserts recipient's email address" },
-        ].map(({ token, label, tip }) => (
-          <button
-            key={token}
-            type="button"
-            onClick={() => insertToken(token)}
-            title={tip}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-          >
-            <UserRound className="w-3 h-3" />
-            {label}
-          </button>
-        ))}
+        {showTokens && (
+          <>
+            <Divider />
+            {/* Personalisation tokens */}
+            <span className="text-xs text-muted-foreground pl-1 pr-0.5">Insert:</span>
+            {[
+              { token: "{{first_name}}", label: "First name",   tip: "Inserts recipient's first name — e.g. \"James\"" },
+              { token: "{{name}}",       label: "Full name",    tip: "Inserts recipient's full name — e.g. \"James Carter\"" },
+              { token: "{{company}}",    label: "Company",      tip: "Inserts recipient's company name — blank if unknown" },
+              { token: "{{email}}",      label: "Email",        tip: "Inserts recipient's email address" },
+            ].map(({ token, label, tip }) => (
+              <button
+                key={token}
+                type="button"
+                onClick={() => insertToken(token)}
+                title={tip}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                <UserRound className="w-3 h-3" />
+                {label}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Editable area */}
@@ -148,13 +153,15 @@ export function RichTextEditor({
       </div>
 
       {/* Hint */}
-      <div className="px-3 py-1.5 border-t border-border bg-muted/20 text-xs text-muted-foreground">
-        Tokens are replaced individually per recipient when the requirement is sent —{" "}
-        <span className="font-mono bg-muted px-1 rounded">{"{{first_name}}"}</span>{" "}
-        <span className="font-mono bg-muted px-1 rounded">{"{{name}}"}</span>{" "}
-        <span className="font-mono bg-muted px-1 rounded">{"{{company}}"}</span>{" "}
-        <span className="font-mono bg-muted px-1 rounded">{"{{email}}"}</span>
-      </div>
+      {showTokens && (
+        <div className="px-3 py-1.5 border-t border-border bg-muted/20 text-xs text-muted-foreground">
+          Tokens are replaced individually per recipient when sent —{" "}
+          <span className="font-mono bg-muted px-1 rounded">{"{{first_name}}"}</span>{" "}
+          <span className="font-mono bg-muted px-1 rounded">{"{{name}}"}</span>{" "}
+          <span className="font-mono bg-muted px-1 rounded">{"{{company}}"}</span>{" "}
+          <span className="font-mono bg-muted px-1 rounded">{"{{email}}"}</span>
+        </div>
+      )}
     </div>
   );
 }
