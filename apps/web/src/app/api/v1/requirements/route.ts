@@ -58,16 +58,14 @@ export async function POST(request: NextRequest) {
       userRecord.companyName,
     );
 
-    // Determine email provider
-    const hasAhaSend = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    const hasResend  = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
-    if (!hasAhaSend && !hasResend) {
-      return NextResponse.json({ error: "No email provider configured." }, { status: 500 });
+    // Determine email provider — AhaSend primary, MailerCloud automatic fallback
+    const hasAhaSend     = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
+    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
+    if (!hasAhaSend && !hasMailerCloud) {
+      return NextResponse.json({ error: "No email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
-    const fromAddress  = hasAhaSend
-      ? (process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us")
-      : (process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us");
+    const fromAddress  = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${userRecord.name ?? "CloudSourceHRM"} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
 
@@ -134,51 +132,47 @@ export async function POST(request: NextRequest) {
       return html.replace("{{unsubscribe_link}}", `<a href="${buildUnsubscribeLink(logId, recipientEmail)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`) + trackingPixel;
     }
 
+    // ── Helper: build per-recipient message payload ───────────────────────
+    function buildMessages() {
+      return logRecords.map((r) => ({
+        to:         r.email,
+        toName:     r.email,
+        fromName,
+        replyTo:    replyToEmail,
+        subject,
+        html:       buildHtml(r.logId, r.email),
+        text,
+        emailLogId: r.logId,
+        ...(ccEmailArr.length ? { cc: ccEmailArr } : {}),
+      }));
+    }
+
+    // ── AhaSend (primary) ─────────────────────────────────────────────────
     if (hasAhaSend) {
       try {
         const { ahasend } = await import("@/lib/email/ahasend");
-        const messages = logRecords.map((r) => ({
-          to:         r.email,
-          toName:     r.email,
-          fromName,
-          replyTo:    replyToEmail,
-          subject,
-          html:       buildHtml(r.logId, r.email),
-          text,
-          emailLogId: r.logId,
-          // CC goes on every message (same email blast)
-          ...(ccEmailArr.length ? { cc: ccEmailArr } : {}),
-        }));
-        await ahasend.sendBulk(messages);
+        await ahasend.sendBulk(buildMessages());
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = logRecords.length;
       } catch (err) {
-        console.error("[requirements/send] AhaSend failed:", err);
+        console.error("[requirements/send] AhaSend failed, switching to MailerCloud:", err instanceof Error ? err.message : err);
       }
     }
 
-    if (sentCount === 0 && hasResend) {
+    // ── MailerCloud (automatic fallback) ──────────────────────────────────
+    if (sentCount === 0 && hasMailerCloud) {
       try {
-        const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(
-          logRecords.map((r) => ({
-            to:      r.email,
-            subject,
-            html:    buildHtml(r.logId, r.email),
-            text,
-            replyTo: replyToEmail,
-            ...(ccEmailArr.length ? { cc: ccEmailArr } : {}),
-          })),
-        );
+        const { mailercloud } = await import("@/lib/email/mailercloud");
+        await mailercloud.sendBulk(buildMessages());
         for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = logRecords.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[requirements/send] Resend failed:", msg);
+        console.error("[requirements/send] MailerCloud also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }

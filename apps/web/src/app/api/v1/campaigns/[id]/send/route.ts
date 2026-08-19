@@ -110,19 +110,16 @@ export async function POST(
       DO UPDATE SET count = usage_counters.count + 1, updated_at = now()
     `);
 
-    // Determine email provider first — needed to pick the correct from address
-    const hasAhaSend = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    const hasResend = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
+    // Determine email provider — AhaSend is primary, MailerCloud is automatic fallback
+    const hasAhaSend      = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
+    const hasMailerCloud  = !!(process.env.MAILERCLOUD_API_KEY);
 
-    const fromName = `${userRecord.name} via CloudSourceHRM`;
-    // AhaSend campaigns go from info@cloudsourcehrm.us; transactional Resend uses no-reply@
-    const fromAddress = hasAhaSend
-      ? (process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us")
-      : (process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us");
+    const fromName    = `${userRecord.name} via CloudSourceHRM`;
+    const fromAddress = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
 
-    if (!hasAhaSend && !hasResend) {
+    if (!hasAhaSend && !hasMailerCloud) {
       await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
-      return NextResponse.json({ error: "No email provider configured. Set AHASEND_API_KEY or RESEND_API_KEY." }, { status: 500 });
+      return NextResponse.json({ error: "No email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
     // Create email log records
@@ -163,66 +160,56 @@ export async function POST(
       return { ...r, companyName: (contact as { companyName?: string | null } | undefined)?.companyName ?? null };
     });
 
-    // Send emails directly — no queue needed
+    // Send emails — AhaSend primary, MailerCloud automatic fallback
     let sentCount = 0;
-    let provider: "ahasend" | "resend" = hasAhaSend ? "ahasend" : "resend";
+    let provider: "ahasend" | "mailercloud" = hasAhaSend ? "ahasend" : "mailercloud";
     const now = new Date();
 
+    // ── Helper: build per-recipient payload ────────────────────────────────
+    function buildMessages() {
+      return enriched.map((r) => {
+        const unsubLink     = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
+        const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
+        return {
+          to:         r.email,
+          toName:     r.name,
+          fromName,
+          replyTo:    replyToEmail,
+          subject:    personalise(campaign.subject, r),
+          html:       personalise(campaign.bodyHtml, r) + unsubLink + trackingPixel,
+          text:       personalise(campaign.bodyText ?? "", r),
+          emailLogId: r.logId,
+        };
+      });
+    }
+
+    // ── AhaSend ───────────────────────────────────────────────────────────
     if (hasAhaSend) {
       try {
         const { ahasend } = await import("@/lib/email/ahasend");
-        const messages = enriched.map((r) => {
-          const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
-          const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
-          const personalisedHtml = personalise(campaign.bodyHtml, r);
-          const personalisedText = personalise(campaign.bodyText ?? "", r);
-          const personalisedSubject = personalise(campaign.subject, r);
-          return {
-            to: r.email, toName: r.name, fromName, replyTo: replyToEmail,
-            subject: personalisedSubject,
-            html: personalisedHtml + unsubLink + trackingPixel,
-            text: personalisedText,
-            emailLogId: r.logId,
-          };
-        });
-        await ahasend.sendBulk(messages);
-        // Mark all as sent
+        await ahasend.sendBulk(buildMessages());
         for (const r of enriched) {
           await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = enriched.length;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[campaign/send] AhaSend failed, trying Resend:", msg);
-        provider = "resend";
+        console.error("[campaign/send] AhaSend failed, switching to MailerCloud:", err instanceof Error ? err.message : err);
+        provider = "mailercloud";
       }
     }
 
-    if (sentCount === 0 && hasResend) {
+    // ── MailerCloud fallback ──────────────────────────────────────────────
+    if (sentCount === 0 && hasMailerCloud) {
       try {
-        const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(enriched.map((r) => {
-          const unsubLink = `<p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:24px;"><a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#9ca3af;">Unsubscribe</a></p>`;
-          const trackingPixel = buildOpenTrackingPixel(r.logId, r.email);
-          const personalisedHtml = personalise(campaign.bodyHtml, r);
-          const personalisedText = personalise(campaign.bodyText ?? "", r);
-          const personalisedSubject = personalise(campaign.subject, r);
-          return {
-            to: r.email,
-            subject: personalisedSubject,
-            html: personalisedHtml + unsubLink + trackingPixel,
-            text: personalisedText,
-            replyTo: replyToEmail,
-          };
-        }));
+        const { mailercloud } = await import("@/lib/email/mailercloud");
+        await mailercloud.sendBulk(buildMessages());
         for (const r of enriched) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = enriched.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[campaign/send] Resend also failed:", msg);
-        // Mark all as failed
+        console.error("[campaign/send] MailerCloud also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }
