@@ -165,6 +165,11 @@ export async function POST(
     let provider: "ahasend" | "mailercloud" = hasAhaSend ? "ahasend" : "mailercloud";
     const now = new Date();
 
+    // Capture campaign fields as consts so TS control-flow keeps them non-nullable inside closures
+    const campaignSubject  = campaign.subject;
+    const campaignBodyHtml = campaign.bodyHtml;
+    const campaignBodyText = campaign.bodyText ?? "";
+
     // ── Helper: build per-recipient payload ────────────────────────────────
     function buildMessages() {
       return enriched.map((r) => {
@@ -175,9 +180,9 @@ export async function POST(
           toName:     r.name,
           fromName,
           replyTo:    replyToEmail,
-          subject:    personalise(campaign.subject, r),
-          html:       personalise(campaign.bodyHtml, r) + unsubLink + trackingPixel,
-          text:       personalise(campaign.bodyText ?? "", r),
+          subject:    personalise(campaignSubject, r),
+          html:       personalise(campaignBodyHtml, r) + unsubLink + trackingPixel,
+          text:       personalise(campaignBodyText, r),
           emailLogId: r.logId,
         };
       });
