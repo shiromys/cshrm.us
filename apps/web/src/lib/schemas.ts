@@ -81,7 +81,7 @@ export const travelOptions = [
 export const requirementSchema = z.object({
   // Step 1 – Job Details
   jobTitle:           z.string().min(1, "Job title is required"),
-  jobId:              z.string().optional(),
+  jobId:              z.string().regex(/^[a-zA-Z0-9-]*$/, "Only alphanumeric characters and hyphens allowed").optional(),
   workSetting:        z.enum(["remote", "onsite", "hybrid"], { required_error: "Work setting is required" }),
   hireType:           z.enum(["direct_hire", "contract"], { required_error: "Hire type is required" }),
   positionType:       z.enum(["full_time", "part_time"], { required_error: "Position type is required" }),
