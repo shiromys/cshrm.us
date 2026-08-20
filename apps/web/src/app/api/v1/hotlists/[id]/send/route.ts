@@ -169,16 +169,14 @@ export async function POST(
       return NextResponse.json({ error: "Daily campaign limit reached" }, { status: 429 });
     }
 
-    // Determine provider
-    const hasAhaSend = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    const hasResend  = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
-    if (!hasAhaSend && !hasResend) {
-      return NextResponse.json({ error: "No email provider configured." }, { status: 500 });
+    // Determine provider — AhaSend primary, MailerCloud redundant fallback (Resend is transactional only)
+    const hasAhaSend      = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
+    const hasMailerCloud  = !!(process.env.MAILERCLOUD_API_KEY);
+    if (!hasAhaSend && !hasMailerCloud) {
+      return NextResponse.json({ error: "No bulk email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
-    const fromAddress  = hasAhaSend
-      ? (process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us")
-      : (process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us");
+    const fromAddress  = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${senderName} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
 
@@ -247,10 +245,11 @@ export async function POST(
       }
     }
 
-    if (sentCount === 0 && hasResend) {
+    // ── MailerCloud fallback ──────────────────────────────────────────────
+    if (sentCount === 0 && hasMailerCloud) {
       try {
-        const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(logRecords.map((r) => {
+        const { mailercloud } = await import("@/lib/email/mailercloud");
+        await mailercloud.sendBulk(logRecords.map((r) => {
           const html = buildHotlistEmail({
             hotlistName: hotlist.name,
             tableHtml,
@@ -260,14 +259,15 @@ export async function POST(
             unsubLink: `<a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`,
             trackingPixel: buildOpenTrackingPixel(r.logId, r.email),
           });
-          return { to: r.email, subject, html, text: plainText, replyTo: replyToEmail };
+          return { to: r.email, toName: r.name, fromName, replyTo: replyToEmail, subject, html, text: plainText, emailLogId: r.logId };
         }));
         for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = logRecords.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        console.error("[hotlist/send] MailerCloud also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }
