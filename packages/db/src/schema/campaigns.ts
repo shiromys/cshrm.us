@@ -32,7 +32,7 @@ export const campaigns = pgTable("campaigns", {
   updatedAt:               timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const emailProviderEnum = pgEnum("email_provider", ["mailercloud", "resend"]);
+export const emailProviderEnum = pgEnum("email_provider", ["mailercloud", "postmark", "resend"]);
 export const emailLogStatusEnum = pgEnum("email_log_status", [
   "queued", "sent", "delivered", "opened", "bounced", "complained", "unsubscribed", "failed"
 ]);

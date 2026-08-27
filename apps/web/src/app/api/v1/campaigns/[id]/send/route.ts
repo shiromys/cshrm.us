@@ -180,7 +180,7 @@ export async function POST(
       });
     }
 
-    // ── MailerCloud (bulk sender) ─────────────────────────────────────────
+    // ── Primary: MailerCloud ──────────────────────────────────────────────
     try {
       const { mailercloud } = await import("@/lib/email/mailercloud");
       await mailercloud.sendBulk(buildMessages());
@@ -188,14 +188,27 @@ export async function POST(
         await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
       }
       sentCount = enriched.length;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[campaign/send] MailerCloud failed:", msg);
-      for (const r of logRecords) {
-        await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
+    } catch (primaryErr) {
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      console.error("[campaign/send] MailerCloud failed, trying Postmark:", primaryMsg);
+
+      // ── Fallback: Postmark ──────────────────────────────────────────────
+      try {
+        const { postmark } = await import("@/lib/email/postmark");
+        await postmark.sendBulk(buildMessages());
+        for (const r of enriched) {
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "postmark" }).where(eq(emailLogs.id, r.logId));
+        }
+        sentCount = enriched.length;
+      } catch (fallbackErr) {
+        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        console.error("[campaign/send] Postmark also failed:", fallbackMsg);
+        for (const r of logRecords) {
+          await db.update(emailLogs).set({ status: "failed", errorMessage: fallbackMsg }).where(eq(emailLogs.id, r.logId));
+        }
+        await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
+        return NextResponse.json({ error: `Email sending failed: MailerCloud — ${primaryMsg}. Postmark — ${fallbackMsg}` }, { status: 500 });
       }
-      await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
-      return NextResponse.json({ error: `Email sending failed: ${msg}` }, { status: 500 });
     }
 
     // Mark campaign as sent
