@@ -54,7 +54,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-6 mt-2 space-y-1">
             <li><strong>Neon (database hosting):</strong> Your data is stored in a PostgreSQL database hosted on Neon&apos;s infrastructure.</li>
             <li><strong>Stripe:</strong> Payment processing. Stripe stores payment method details under their own privacy policy.</li>
-            <li><strong>Resend / AhaSend:</strong> Email delivery providers used to send campaigns and transactional emails on your behalf.</li>
+            <li><strong>MailerCloud / Resend:</strong> Email delivery providers used to send campaigns and transactional emails on your behalf.</li>
             <li><strong>Railway:</strong> Cloud hosting for our application servers.</li>
           </ul>
           <p className="mt-3">All providers are contractually bound to use your data only as directed by us.</p>

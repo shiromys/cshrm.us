@@ -6,37 +6,37 @@ const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 5000; // poll every 5 seconds
 
 async function sendEmail(job: CampaignEmailJob): Promise<{ provider: string }> {
-  const hasAhaSend = process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder";
-  const hasResend = process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder");
+  const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
+  const hasResend      = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
 
-  if (hasAhaSend) {
-    const { ahasend } = await import("@/lib/email/ahasend");
-    await ahasend.sendSingle({
-      to: job.recipientEmail,
-      toName: job.recipientName,
+  if (hasMailerCloud) {
+    const { mailercloud } = await import("@/lib/email/mailercloud");
+    await mailercloud.sendOne({
+      to:       job.recipientEmail,
+      toName:   job.recipientName,
       fromName: job.fromName,
-      replyTo: job.replyToEmail,
-      subject: job.subject,
-      html: job.bodyHtml,
-      text: job.bodyText,
+      replyTo:  job.replyToEmail,
+      subject:  job.subject,
+      html:     job.bodyHtml,
+      text:     job.bodyText,
     });
-    return { provider: "ahasend" };
+    return { provider: "mailercloud" };
   }
 
   if (hasResend) {
     const { resendClient } = await import("@/lib/email/resend");
     await resendClient.emails.send({
-      from: `${job.fromName} <${process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us"}>`,
-      to: job.recipientEmail,
+      from:    `${job.fromName} <${process.env.EMAIL_FROM_ADDRESS ?? "no-reply@cloudsourcehrm.us"}>`,
+      to:      job.recipientEmail,
       subject: job.subject,
-      html: job.bodyHtml,
-      text: job.bodyText,
+      html:    job.bodyHtml,
+      text:    job.bodyText,
       replyTo: job.replyToEmail,
     });
     return { provider: "resend" };
   }
 
-  throw new Error("No email provider configured (set AHASEND_API_KEY or RESEND_API_KEY)");
+  throw new Error("No email provider configured (set MAILERCLOUD_API_KEY or RESEND_API_KEY)");
 }
 
 async function markCampaignIfComplete(campaignId: string) {
@@ -75,7 +75,7 @@ async function processBatch() {
       const { provider } = await sendEmail(data);
       console.log(`[worker] Sent to ${data.recipientEmail} via ${provider}`);
       await db.update(emailLogs)
-        .set({ status: "sent", sentAt: new Date(), provider: provider as "ahasend" | "resend" })
+        .set({ status: "sent", sentAt: new Date(), provider: provider as "mailercloud" | "resend" })
         .where(eq(emailLogs.id, data.emailLogId));
       completedIds.push(job.id);
     } catch (err) {

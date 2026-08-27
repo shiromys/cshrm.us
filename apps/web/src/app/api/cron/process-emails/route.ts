@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCronSecret } from "@/lib/utils";
 import { getBoss, QUEUE_NAMES, type CampaignEmailJob } from "@/lib/queue";
-import { ahasend } from "@/lib/email/ahasend";
+import { mailercloud } from "@/lib/email/mailercloud";
 import { resend } from "@/lib/email/resend";
 import { db, emailLogs, campaigns } from "@/lib/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
@@ -61,12 +61,12 @@ export async function GET(request: NextRequest) {
   });
 
   const ids = jobs.map((j) => j.id);
-  let provider: "ahasend" | "resend" = "ahasend";
+  let provider: "mailercloud" | "resend" = "mailercloud";
 
   try {
-    await ahasend.sendBulk(messages);
+    await mailercloud.sendBulk(messages);
   } catch (err) {
-    console.error("AhaSend bulk failed, falling back to Resend:", err);
+    console.error("MailerCloud bulk failed, falling back to Resend:", err);
     provider = "resend";
     try {
       await resend.sendBatch(
@@ -80,7 +80,6 @@ export async function GET(request: NextRequest) {
       );
     } catch (resendErr) {
       console.error("Resend fallback also failed:", resendErr);
-      // pg-boss v10: fail requires queue name as first arg
       await boss.fail(QUEUE_NAMES.CAMPAIGN_EMAIL, ids);
       return NextResponse.json({ error: "Both providers failed", processed: 0 }, { status: 500 });
     }

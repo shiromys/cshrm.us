@@ -169,14 +169,14 @@ export async function POST(
       return NextResponse.json({ error: "Daily campaign limit reached" }, { status: 429 });
     }
 
-    // Determine provider — AhaSend primary, MailerCloud redundant fallback (Resend is transactional only)
-    const hasAhaSend      = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    const hasMailerCloud  = !!(process.env.MAILERCLOUD_API_KEY);
-    if (!hasAhaSend && !hasMailerCloud) {
-      return NextResponse.json({ error: "No bulk email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
+    // Determine provider — MailerCloud primary, Resend automatic fallback
+    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
+    const hasResend      = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
+    if (!hasMailerCloud && !hasResend) {
+      return NextResponse.json({ error: "No bulk email provider configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
-    const fromAddress  = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+    const fromAddress  = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${senderName} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
 
@@ -220,54 +220,50 @@ export async function POST(
     let sentCount = 0;
     const now = new Date();
 
-    if (hasAhaSend) {
-      try {
-        const { ahasend } = await import("@/lib/email/ahasend");
-        const messages = logRecords.map((r) => {
-          const html = buildHotlistEmail({
-            hotlistName: hotlist.name,
-            tableHtml,
-            introNote,
-            senderName,
-            senderCompany: userRecord.companyName,
-            unsubLink: `<a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`,
-            trackingPixel: buildOpenTrackingPixel(r.logId, r.email),
-          });
-          return { to: r.email, toName: r.name, fromName, replyTo: replyToEmail, subject, html, text: plainText, emailLogId: r.logId };
+    // Build per-recipient message helper
+    function buildHotlistMessages() {
+      return logRecords.map((r) => {
+        const html = buildHotlistEmail({
+          hotlistName: hotlist.name,
+          tableHtml,
+          introNote,
+          senderName,
+          senderCompany: userRecord.companyName,
+          unsubLink: `<a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`,
+          trackingPixel: buildOpenTrackingPixel(r.logId, r.email),
         });
-        await ahasend.sendBulk(messages);
+        return { to: r.email, toName: r.name, fromName, replyTo: replyToEmail, subject, html, text: plainText, emailLogId: r.logId };
+      });
+    }
+
+    // ── MailerCloud (primary) ─────────────────────────────────────────────
+    if (hasMailerCloud) {
+      try {
+        const { mailercloud } = await import("@/lib/email/mailercloud");
+        await mailercloud.sendBulk(buildHotlistMessages());
         for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = logRecords.length;
       } catch (err) {
-        console.error("[hotlist/send] AhaSend failed:", err);
+        console.error("[hotlist/send] MailerCloud failed, trying Resend:", err);
       }
     }
 
-    // ── MailerCloud fallback ──────────────────────────────────────────────
-    if (sentCount === 0 && hasMailerCloud) {
+    // ── Resend (automatic fallback) ────────────────────────────────────────
+    if (sentCount === 0 && hasResend) {
       try {
-        const { mailercloud } = await import("@/lib/email/mailercloud");
-        await mailercloud.sendBulk(logRecords.map((r) => {
-          const html = buildHotlistEmail({
-            hotlistName: hotlist.name,
-            tableHtml,
-            introNote,
-            senderName,
-            senderCompany: userRecord.companyName,
-            unsubLink: `<a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`,
-            trackingPixel: buildOpenTrackingPixel(r.logId, r.email),
-          });
-          return { to: r.email, toName: r.name, fromName, replyTo: replyToEmail, subject, html, text: plainText, emailLogId: r.logId };
-        }));
+        const { resend } = await import("@/lib/email/resend");
+        await resend.sendBatch(buildHotlistMessages().map((m) => ({
+          to: m.to, subject: m.subject, html: m.html, text: m.text, replyTo: m.replyTo,
+        })));
         for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = logRecords.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[hotlist/send] MailerCloud also failed:", msg);
+        console.error("[hotlist/send] Resend also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }

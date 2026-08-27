@@ -23,7 +23,6 @@ export async function POST(
       return NextResponse.json({ error: "Standard subscription required to send campaigns" }, { status: 403 });
     }
 
-    // Compute reply-to early so we can guard against Reply-To === To (AhaSend anti-phishing rule)
     const replyToEmail = (userRecord.replyToEmail ?? userRecord.email).toLowerCase();
 
     const campaign = await db.query.campaigns.findFirst({
@@ -78,14 +77,11 @@ export async function POST(
       }
     }
 
-    // ── AhaSend anti-phishing guard ───────────────────────────────────────────
-    // AhaSend (and most bulk providers) flag/suspend accounts when Reply-To === To.
-    // This pattern matches phishing emails, so we must strip any recipient whose
-    // email address matches the sender's Reply-To before sending.
+    // Strip any recipient whose email matches the Reply-To (anti-phishing best practice)
     const beforeGuard = recipients.length;
     recipients = recipients.filter((r) => r.email.toLowerCase() !== replyToEmail);
     if (recipients.length < beforeGuard) {
-      console.warn(`[campaign/send] Stripped ${beforeGuard - recipients.length} recipient(s) whose email matched the Reply-To (${replyToEmail}) to comply with anti-phishing rules.`);
+      console.warn(`[campaign/send] Stripped ${beforeGuard - recipients.length} recipient(s) whose email matched the Reply-To (${replyToEmail}).`);
     }
 
     if (recipients.length === 0) {
@@ -110,16 +106,16 @@ export async function POST(
       DO UPDATE SET count = usage_counters.count + 1, updated_at = now()
     `);
 
-    // Determine email provider — AhaSend is primary, MailerCloud is automatic fallback
-    const hasAhaSend      = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    const hasMailerCloud  = !!(process.env.MAILERCLOUD_API_KEY);
+    // Determine email provider — MailerCloud primary, Resend automatic fallback
+    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
+    const hasResend      = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
 
     const fromName    = `${userRecord.name} via CloudSourceHRM`;
-    const fromAddress = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+    const fromAddress = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
 
-    if (!hasAhaSend && !hasMailerCloud) {
+    if (!hasMailerCloud && !hasResend) {
       await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
-      return NextResponse.json({ error: "No email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
+      return NextResponse.json({ error: "No email provider configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
     // Create email log records
@@ -160,9 +156,8 @@ export async function POST(
       return { ...r, companyName: (contact as { companyName?: string | null } | undefined)?.companyName ?? null };
     });
 
-    // Send emails — AhaSend primary, MailerCloud automatic fallback
+    // Send emails — MailerCloud primary, Resend automatic fallback
     let sentCount = 0;
-    let provider: "ahasend" | "mailercloud" = hasAhaSend ? "ahasend" : "mailercloud";
     const now = new Date();
 
     // Capture campaign fields as consts so TS control-flow keeps them non-nullable inside closures
@@ -188,33 +183,34 @@ export async function POST(
       });
     }
 
-    // ── AhaSend ───────────────────────────────────────────────────────────
-    if (hasAhaSend) {
-      try {
-        const { ahasend } = await import("@/lib/email/ahasend");
-        await ahasend.sendBulk(buildMessages());
-        for (const r of enriched) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = enriched.length;
-      } catch (err) {
-        console.error("[campaign/send] AhaSend failed, switching to MailerCloud:", err instanceof Error ? err.message : err);
-        provider = "mailercloud";
-      }
-    }
-
-    // ── MailerCloud fallback ──────────────────────────────────────────────
-    if (sentCount === 0 && hasMailerCloud) {
+    // ── MailerCloud (primary) ─────────────────────────────────────────────
+    if (hasMailerCloud) {
       try {
         const { mailercloud } = await import("@/lib/email/mailercloud");
         await mailercloud.sendBulk(buildMessages());
         for (const r of enriched) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
+        }
+        sentCount = enriched.length;
+      } catch (err) {
+        console.error("[campaign/send] MailerCloud failed, trying Resend:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    // ── Resend (automatic fallback) ────────────────────────────────────────
+    if (sentCount === 0 && hasResend) {
+      try {
+        const { resend } = await import("@/lib/email/resend");
+        await resend.sendBatch(buildMessages().map((m) => ({
+          to: m.to, subject: m.subject, html: m.html, text: m.text, replyTo: m.replyTo,
+        })));
+        for (const r of enriched) {
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
         }
         sentCount = enriched.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[campaign/send] MailerCloud also failed:", msg);
+        console.error("[campaign/send] Resend also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }
@@ -226,7 +222,7 @@ export async function POST(
     // Mark campaign as sent
     await db.update(campaigns).set({ status: "sent", sentAt: now }).where(eq(campaigns.id, id));
 
-    return NextResponse.json({ success: true, recipients: sentCount, provider });
+    return NextResponse.json({ success: true, recipients: sentCount });
 
   } catch (err) {
     console.error("[campaign/send] Unhandled error:", err);
