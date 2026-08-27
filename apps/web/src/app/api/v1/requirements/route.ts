@@ -33,15 +33,17 @@ export async function POST(request: NextRequest) {
     }
     const data = parsed.data;
 
-    // Check daily campaign limit
+    // Check daily campaign limit (admins are exempt)
     const DAILY_LIMIT = 10;
     const todayStr = today();
-    const counter = await db.query.usageCounters.findFirst({
-      where: (uc, { and, eq }) =>
-        and(eq(uc.userId, user.id), eq(uc.counterType, "daily_campaigns"), eq(uc.resetDate, todayStr)),
-    });
-    if (counter && counter.count >= DAILY_LIMIT) {
-      return NextResponse.json({ error: "Daily campaign limit reached" }, { status: 429 });
+    if (!isAdmin) {
+      const counter = await db.query.usageCounters.findFirst({
+        where: (uc, { and, eq }) =>
+          and(eq(uc.userId, user.id), eq(uc.counterType, "daily_campaigns"), eq(uc.resetDate, todayStr)),
+      });
+      if (counter && counter.count >= DAILY_LIMIT) {
+        return NextResponse.json({ error: "Daily campaign limit reached" }, { status: 429 });
+      }
     }
 
     // Build recipient list
@@ -58,28 +60,17 @@ export async function POST(request: NextRequest) {
       userRecord.companyName,
     );
 
-    // Determine email provider — AhaSend primary, MailerCloud automatic fallback
-    const hasAhaSend     = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
+    // Determine email provider — MailerCloud primary, AhaSend automatic fallback
     const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
-    if (!hasAhaSend && !hasMailerCloud) {
-      return NextResponse.json({ error: "No email provider configured. Set AHASEND_API_KEY or MAILERCLOUD_API_KEY." }, { status: 500 });
+    const hasAhaSend     = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
+    if (!hasMailerCloud && !hasAhaSend) {
+      return NextResponse.json({ error: "No email provider configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
-    const fromAddress  = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+    const fromAddress  = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${userRecord.name ?? "CloudSourceHRM"} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
-
-    // ── AhaSend anti-phishing guard ───────────────────────────────────────────
-    // Strip any To recipient whose email matches the Reply-To.
-    // AhaSend flags/suspends accounts when Reply-To === To (phishing pattern).
-    const replyToLower = replyToEmail.toLowerCase();
-    const safeToEmails = toEmails.filter((e) => e.toLowerCase() !== replyToLower);
-    if (safeToEmails.length < toEmails.length) {
-      console.warn(`[requirements/send] Stripped ${toEmails.length - safeToEmails.length} recipient(s) matching Reply-To (${replyToEmail}) to comply with anti-phishing rules.`);
-    }
-    if (safeToEmails.length === 0) {
-      return NextResponse.json({ error: "All recipient emails matched the sender's Reply-To address. Please use different recipient addresses." }, { status: 400 });
-    }
+    const safeToEmails = toEmails; // MailerCloud has no anti-phishing restriction on Reply-To matching To
 
     // Create campaign record (stores structured data for future reference)
     const [campaign] = await db.insert(campaigns).values({
@@ -147,8 +138,22 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // ── AhaSend (primary) ─────────────────────────────────────────────────
-    if (hasAhaSend) {
+    // ── MailerCloud (primary) ─────────────────────────────────────────────
+    if (hasMailerCloud) {
+      try {
+        const { mailercloud } = await import("@/lib/email/mailercloud");
+        await mailercloud.sendBulk(buildMessages());
+        for (const r of logRecords) {
+          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* enum closest match */ }).where(eq(emailLogs.id, r.logId));
+        }
+        sentCount = logRecords.length;
+      } catch (err) {
+        console.error("[requirements/send] MailerCloud failed, trying AhaSend fallback:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    // ── AhaSend (automatic fallback) ──────────────────────────────────────
+    if (sentCount === 0 && hasAhaSend) {
       try {
         const { ahasend } = await import("@/lib/email/ahasend");
         await ahasend.sendBulk(buildMessages());
@@ -157,22 +162,8 @@ export async function POST(request: NextRequest) {
         }
         sentCount = logRecords.length;
       } catch (err) {
-        console.error("[requirements/send] AhaSend failed, switching to MailerCloud:", err instanceof Error ? err.message : err);
-      }
-    }
-
-    // ── MailerCloud (automatic fallback) ──────────────────────────────────
-    if (sentCount === 0 && hasMailerCloud) {
-      try {
-        const { mailercloud } = await import("@/lib/email/mailercloud");
-        await mailercloud.sendBulk(buildMessages());
-        for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "ahasend" /* closest enum */ }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = logRecords.length;
-      } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[requirements/send] MailerCloud also failed:", msg);
+        console.error("[requirements/send] AhaSend also failed:", msg);
         for (const r of logRecords) {
           await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
         }
