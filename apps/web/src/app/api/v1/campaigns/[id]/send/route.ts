@@ -106,16 +106,13 @@ export async function POST(
       DO UPDATE SET count = usage_counters.count + 1, updated_at = now()
     `);
 
-    // Determine email provider — MailerCloud primary, Resend automatic fallback
-    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
-    const hasResend      = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
-
+    // Bulk sending uses MailerCloud only. Resend is reserved for transactional emails.
     const fromName    = `${userRecord.name} via CloudSourceHRM`;
     const fromAddress = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
 
-    if (!hasMailerCloud && !hasResend) {
+    if (!process.env.MAILERCLOUD_API_KEY) {
       await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
-      return NextResponse.json({ error: "No email provider configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
+      return NextResponse.json({ error: "Bulk email not configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
     // Create email log records
@@ -183,40 +180,22 @@ export async function POST(
       });
     }
 
-    // ── MailerCloud (primary) ─────────────────────────────────────────────
-    if (hasMailerCloud) {
-      try {
-        const { mailercloud } = await import("@/lib/email/mailercloud");
-        await mailercloud.sendBulk(buildMessages());
-        for (const r of enriched) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = enriched.length;
-      } catch (err) {
-        console.error("[campaign/send] MailerCloud failed, trying Resend:", err instanceof Error ? err.message : err);
+    // ── MailerCloud (bulk sender) ─────────────────────────────────────────
+    try {
+      const { mailercloud } = await import("@/lib/email/mailercloud");
+      await mailercloud.sendBulk(buildMessages());
+      for (const r of enriched) {
+        await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
       }
-    }
-
-    // ── Resend (automatic fallback) ────────────────────────────────────────
-    if (sentCount === 0 && hasResend) {
-      try {
-        const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(buildMessages().map((m) => ({
-          to: m.to, subject: m.subject, html: m.html, text: m.text, replyTo: m.replyTo,
-        })));
-        for (const r of enriched) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = enriched.length;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[campaign/send] Resend also failed:", msg);
-        for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
-        }
-        await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
-        return NextResponse.json({ error: `Email sending failed: ${msg}` }, { status: 500 });
+      sentCount = enriched.length;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[campaign/send] MailerCloud failed:", msg);
+      for (const r of logRecords) {
+        await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
       }
+      await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, id));
+      return NextResponse.json({ error: `Email sending failed: ${msg}` }, { status: 500 });
     }
 
     // Mark campaign as sent

@@ -60,17 +60,15 @@ export async function POST(request: NextRequest) {
       userRecord.companyName,
     );
 
-    // Determine email provider — MailerCloud primary, Resend automatic fallback
-    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY);
-    const hasResend      = !!(process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_placeholder"));
-    if (!hasMailerCloud && !hasResend) {
-      return NextResponse.json({ error: "No email provider configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
+    // Bulk sending uses MailerCloud only. Resend is reserved for transactional emails.
+    if (!process.env.MAILERCLOUD_API_KEY) {
+      return NextResponse.json({ error: "Bulk email not configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
     const fromAddress  = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${userRecord.name ?? "CloudSourceHRM"} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
-    const safeToEmails = toEmails; // MailerCloud has no anti-phishing restriction on Reply-To matching To
+    const safeToEmails = toEmails;
 
     // Create campaign record (stores structured data for future reference)
     const [campaign] = await db.insert(campaigns).values({
@@ -138,40 +136,22 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // ── MailerCloud (primary) ─────────────────────────────────────────────
-    if (hasMailerCloud) {
-      try {
-        const { mailercloud } = await import("@/lib/email/mailercloud");
-        await mailercloud.sendBulk(buildMessages());
-        for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = logRecords.length;
-      } catch (err) {
-        console.error("[requirements/send] MailerCloud failed, trying Resend:", err instanceof Error ? err.message : err);
+    // ── MailerCloud (bulk sender) ─────────────────────────────────────────
+    try {
+      const { mailercloud } = await import("@/lib/email/mailercloud");
+      await mailercloud.sendBulk(buildMessages());
+      for (const r of logRecords) {
+        await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "mailercloud" }).where(eq(emailLogs.id, r.logId));
       }
-    }
-
-    // ── Resend (automatic fallback) ───────────────────────────────────────
-    if (sentCount === 0 && hasResend) {
-      try {
-        const { resend } = await import("@/lib/email/resend");
-        await resend.sendBatch(buildMessages().map((m) => ({
-          to: m.to, subject: m.subject, html: m.html, text: m.text ?? "", replyTo: m.replyTo,
-        })));
-        for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "sent", sentAt: now, provider: "resend" }).where(eq(emailLogs.id, r.logId));
-        }
-        sentCount = logRecords.length;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[requirements/send] Resend also failed:", msg);
-        for (const r of logRecords) {
-          await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
-        }
-        await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, campaign.id));
-        return NextResponse.json({ error: `Email sending failed: ${msg}` }, { status: 500 });
+      sentCount = logRecords.length;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[requirements/send] MailerCloud failed:", msg);
+      for (const r of logRecords) {
+        await db.update(emailLogs).set({ status: "failed", errorMessage: msg }).where(eq(emailLogs.id, r.logId));
       }
+      await db.update(campaigns).set({ status: "draft", totalRecipients: 0 }).where(eq(campaigns.id, campaign.id));
+      return NextResponse.json({ error: `Email sending failed: ${msg}` }, { status: 500 });
     }
 
     // Mark campaign sent
