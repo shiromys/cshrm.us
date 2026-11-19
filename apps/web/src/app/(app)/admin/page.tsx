@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import {
   Users, Mail, FileUp, UserCheck, TrendingUp, CreditCard,
-  Star, Send, CheckCircle2, MousePointerClick, XCircle, ArrowRight
+  Star, Send, CheckCircle2, MousePointerClick, XCircle, ArrowRight, Activity,
 } from "lucide-react";
 
 export default async function AdminPage() {
@@ -136,6 +136,18 @@ export default async function AdminPage() {
             <Card className="hover:shadow-md transition-shadow cursor-pointer p-4 flex items-center gap-3">
               <Users className="w-5 h-5 text-primary" />
               <div><p className="font-medium">User Management</p><p className="text-xs text-muted-foreground">View and manage accounts</p></div>
+            </Card>
+          </Link>
+          <Link href="/admin/billing">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer p-4 flex items-center gap-3">
+              <CreditCard className="w-5 h-5 text-primary" />
+              <div><p className="font-medium">Billing &amp; Payments</p><p className="text-xs text-muted-foreground">Subscriptions, invoices, revenue</p></div>
+            </Card>
+          </Link>
+          <Link href="/admin/monitoring">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer p-4 flex items-center gap-3">
+              <Activity className="w-5 h-5 text-primary" />
+              <div><p className="font-medium">System Monitoring</p><p className="text-xs text-muted-foreground">DB, SMTP, app health &amp; logs</p></div>
             </Card>
           </Link>
         </div>

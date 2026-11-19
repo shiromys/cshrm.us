@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Building2, Mail, List, Briefcase,
-  Settings, ShieldCheck, LogOut
+  Settings, ShieldCheck, LogOut, CreditCard, Activity,
 } from "lucide-react";
 import { CsHrmLogo } from "@/components/cshrm-logo";
 import { cn } from "@/lib/utils";
@@ -110,18 +110,25 @@ export function AppSidebar() {
             <div className="pt-4 pb-2">
               <p className="text-xs text-blue-300 uppercase tracking-wider px-3">Admin</p>
             </div>
-            <Link
-              href="/admin"
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                pathname.startsWith("/admin")
-                  ? "bg-white/20 text-white font-medium"
-                  : "text-blue-100 hover:bg-white/10 hover:text-white"
-              )}
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              Admin Panel
-            </Link>
+            {[
+              { href: "/admin",            icon: ShieldCheck, label: "Admin Panel"  },
+              { href: "/admin/billing",    icon: CreditCard,  label: "Billing"      },
+              { href: "/admin/monitoring", icon: Activity,    label: "Monitoring"   },
+            ].map(({ href, icon: Icon, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                  pathname === href || (href !== "/admin" && pathname.startsWith(href))
+                    ? "bg-white/20 text-white font-medium"
+                    : "text-blue-100 hover:bg-white/10 hover:text-white"
+                )}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                {label}
+              </Link>
+            ))}
           </>
         )}
       </nav>

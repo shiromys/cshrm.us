@@ -60,13 +60,13 @@ export async function POST(request: NextRequest) {
       userRecord.companyName,
     );
 
-    // Primary sender: AhaSend. Secondary: Postmark (TODO: wire up when integrated).
-    const hasAhaSend = !!(process.env.AHASEND_API_KEY && process.env.AHASEND_API_KEY !== "placeholder");
-    if (!hasAhaSend) {
-      return NextResponse.json({ error: "Email provider not configured. Set AHASEND_API_KEY." }, { status: 500 });
+    // Primary sender: MailerCloud. Fallback: Postmark.
+    const hasMailerCloud = !!(process.env.MAILERCLOUD_API_KEY && process.env.MAILERCLOUD_API_KEY !== "placeholder");
+    if (!hasMailerCloud) {
+      return NextResponse.json({ error: "Email provider not configured. Set MAILERCLOUD_API_KEY." }, { status: 500 });
     }
 
-    const fromAddress  = process.env.AHASEND_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+    const fromAddress  = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
     const fromName     = `${userRecord.name ?? "CloudSourceHRM"} via CloudSourceHRM`;
     const replyToEmail = userRecord.replyToEmail ?? userRecord.email;
     const safeToEmails = toEmails;
