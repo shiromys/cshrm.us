@@ -283,7 +283,7 @@ export async function POST(
       event:    "hotlist_sent",
       summary:  `Sent hotlist "${safeHotlist.name}" to ${sentCount} recipient${sentCount !== 1 ? "s" : ""}`,
       metadata: { hotlistId: id, hotlistName: safeHotlist.name, recipients: sentCount, campaignId: campaign.id },
-      request,
+      request: req,
     });
 
     return NextResponse.json({ success: true, campaignId: campaign.id, recipients: sentCount });
