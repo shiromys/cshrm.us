@@ -124,6 +124,7 @@ export async function POST(
       where: (h, { and, eq, isNull }) => and(eq(h.id, id), eq(h.userId, session.user.id), isNull(h.deletedAt)),
     });
     if (!hotlist) return NextResponse.json({ error: "Hotlist not found" }, { status: 404 });
+    const safeHotlist = hotlist; // narrow away undefined for closures below
 
     const entries = await db.select().from(hotlistEntries).where(eq(hotlistEntries.hotlistId, id));
     if (entries.length === 0) return NextResponse.json({ error: "Hotlist has no entries to send" }, { status: 400 });
@@ -224,7 +225,7 @@ export async function POST(
     function buildHotlistMessages() {
       return logRecords.map((r) => {
         const html = buildHotlistEmail({
-          hotlistName: hotlist.name,
+          hotlistName: safeHotlist.name,
           tableHtml,
           introNote,
           senderName,
