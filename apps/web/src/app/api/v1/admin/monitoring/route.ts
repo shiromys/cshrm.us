@@ -87,11 +87,25 @@ export async function GET(request: NextRequest) {
     .from(emailLogs)
     .groupBy(emailLogs.provider, emailLogs.status);
 
-  // Reshape into { mailercloud: { sent, failed, total }, postmark: {...}, ... }
-  const providerMap: Record<string, { sent: number; failed: number; other: number }> = {};
+  // Reshape into { mailercloud: { sent, failed, other, label, active }, ... }
+  // Active providers always appear; legacy ones (ahasend, resend) are labelled accordingly.
+  const PROVIDER_META: Record<string, { label: string; active: boolean }> = {
+    mailercloud: { label: "MailerCloud",         active: true  },
+    postmark:    { label: "Postmark",            active: true  },
+    resend:      { label: "Resend (legacy)",     active: false },
+    ahasend:     { label: "AhaSend (legacy)",    active: false },
+  };
+
+  // Pre-seed active providers so they always appear even with zero sends
+  const providerMap: Record<string, { sent: number; failed: number; other: number; label: string; active: boolean }> = {
+    mailercloud: { sent: 0, failed: 0, other: 0, label: "MailerCloud",     active: true  },
+    postmark:    { sent: 0, failed: 0, other: 0, label: "Postmark",        active: true  },
+  };
+
   for (const row of providerStats) {
     const prov = row.provider ?? "unknown";
-    if (!providerMap[prov]) providerMap[prov] = { sent: 0, failed: 0, other: 0 };
+    const meta = PROVIDER_META[prov] ?? { label: prov, active: false };
+    if (!providerMap[prov]) providerMap[prov] = { sent: 0, failed: 0, other: 0, ...meta };
     if (row.status === "sent" || row.status === "delivered" || row.status === "opened") {
       providerMap[prov].sent += row.cnt;
     } else if (row.status === "failed" || row.status === "bounced") {

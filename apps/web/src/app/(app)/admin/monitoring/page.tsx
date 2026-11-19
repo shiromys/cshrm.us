@@ -31,7 +31,7 @@ interface MonitoringData {
     errorMessage: string | null;
     createdAt: string;
   }[];
-  providerStats: Record<string, { sent: number; failed: number; other: number }>;
+  providerStats: Record<string, { sent: number; failed: number; other: number; label: string; active: boolean }>;
   usage: {
     todayDate: string;
     dailyCampaignTotal: number;
@@ -298,41 +298,63 @@ export default function AdminMonitoringPage() {
       </div>
 
       {/* ── Provider success rates ── */}
-      {!isLoading && Object.keys(data?.providerStats ?? {}).length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-muted-foreground" />
-              <CardTitle className="text-sm">Provider Success Rates (All Time)</CardTitle>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm">Provider Success Rates (All Time)</CardTitle>
+          </div>
+          <CardDescription className="text-xs">Active providers always shown. Legacy providers reflect historical sends before migration.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <Skeleton /> : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.entries(data?.providerStats ?? {})
+                // Sort: active providers first, then legacy
+                .sort(([, a], [, b]) => (b.active ? 1 : 0) - (a.active ? 1 : 0))
+                .map(([provider, stats]) => {
+                  const total = stats.sent + stats.failed + stats.other;
+                  const rate = total > 0 ? Math.round((stats.sent / total) * 100) : 0;
+                  const isLegacy = !stats.active;
+                  const noData = total === 0;
+                  return (
+                    <div key={provider} className={cn(
+                      "rounded-lg border p-4",
+                      isLegacy ? "opacity-50 bg-muted/30" : "bg-background",
+                    )}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold">{stats.label}</p>
+                        {isLegacy && (
+                          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">legacy</span>
+                        )}
+                        {!isLegacy && !noData && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">active</span>
+                        )}
+                        {!isLegacy && noData && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">no sends yet</span>
+                        )}
+                      </div>
+                      <div className="flex items-end gap-2 mb-2">
+                        <span className={cn("text-2xl font-bold", noData ? "text-muted-foreground" : "text-green-600")}>
+                          {noData ? "—" : `${rate}%`}
+                        </span>
+                        {!noData && <span className="text-xs text-muted-foreground mb-1">success</span>}
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5 mb-2">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${rate}%` }} />
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <div className="flex justify-between"><span>Sent/delivered</span><span className="font-medium text-foreground">{stats.sent.toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span>Failed/bounced</span><span className="font-medium text-red-600">{stats.failed.toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span>Other</span><span className="font-medium text-foreground">{stats.other.toLocaleString()}</span></div>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(data!.providerStats).map(([provider, stats]) => {
-                const total = stats.sent + stats.failed + stats.other;
-                const rate = total > 0 ? Math.round((stats.sent / total) * 100) : 0;
-                return (
-                  <div key={provider} className="rounded-lg border p-4">
-                    <p className="text-sm font-semibold capitalize mb-2">{provider}</p>
-                    <div className="flex items-end gap-2 mb-2">
-                      <span className="text-2xl font-bold text-green-600">{rate}%</span>
-                      <span className="text-xs text-muted-foreground mb-1">success</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-1.5 mb-2">
-                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${rate}%` }} />
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                      <div className="flex justify-between"><span>Sent/delivered</span><span className="font-medium text-foreground">{stats.sent.toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span>Failed/bounced</span><span className="font-medium text-red-600">{stats.failed.toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span>Other</span><span className="font-medium text-foreground">{stats.other.toLocaleString()}</span></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Recent email sends ── */}
       <Card>
