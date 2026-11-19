@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Building2, Mail, List, Briefcase,
-  Settings, ShieldCheck, LogOut, CreditCard, Activity,
+  Settings, ShieldCheck, LogOut, CreditCard, Activity, MessageSquare,
 } from "lucide-react";
 import { CsHrmLogo } from "@/components/cshrm-logo";
 import { cn } from "@/lib/utils";
@@ -111,9 +111,10 @@ export function AppSidebar() {
               <p className="text-xs text-blue-300 uppercase tracking-wider px-3">Admin</p>
             </div>
             {[
-              { href: "/admin",            icon: ShieldCheck, label: "Admin Panel"  },
-              { href: "/admin/billing",    icon: CreditCard,  label: "Billing"      },
-              { href: "/admin/monitoring", icon: Activity,    label: "Monitoring"   },
+              { href: "/admin",            icon: ShieldCheck,    label: "Admin Panel"  },
+              { href: "/admin/billing",    icon: CreditCard,     label: "Billing"      },
+              { href: "/admin/monitoring", icon: Activity,       label: "Monitoring"   },
+              { href: "/admin/support",    icon: MessageSquare,  label: "Support"      },
             ].map(({ href, icon: Icon, label }) => (
               <Link
                 key={href}

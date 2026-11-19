@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { requirementSchema } from "@/lib/schemas";
 import { generateRequirementEmail } from "@/lib/email/requirement-template";
 import { buildUnsubscribeLink, buildOpenTrackingPixel, today } from "@/lib/utils";
+import { logActivity } from "@/lib/activity";
 
 /** Parse a comma-separated email string into a deduped, trimmed array. */
 function parseEmails(raw: string): string[] {
@@ -170,6 +171,14 @@ export async function POST(request: NextRequest) {
 
     // Mark campaign sent
     await db.update(campaigns).set({ status: "sent", sentAt: now }).where(eq(campaigns.id, campaign.id));
+
+    void logActivity({
+      userId:   user.id,
+      event:    "requirement_sent",
+      summary:  `Sent requirement "${data.jobTitle}" to ${sentCount} recipient${sentCount !== 1 ? "s" : ""}`,
+      metadata: { campaignId: campaign.id, jobTitle: data.jobTitle, recipients: sentCount },
+      request,
+    });
 
     return NextResponse.json({ success: true, campaignId: campaign.id, recipients: sentCount }, { status: 201 });
 

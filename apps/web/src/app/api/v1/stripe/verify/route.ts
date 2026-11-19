@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 // Called after Stripe redirects back with ?session_id=...
 // Verifies the checkout session directly with Stripe and upgrades the user's tier
@@ -41,6 +42,14 @@ export async function POST(request: NextRequest) {
           : null,
       })
       .where(eq(users.id, session.user.id));
+
+    void logActivity({
+      userId:   session.user.id,
+      event:    "tier_upgraded",
+      summary:  "Upgraded to Standard tier via Stripe",
+      metadata: { subscriptionId: sub?.id ?? null },
+      request,
+    });
 
     // Bust the better-auth session cache cookies so the client immediately
     // reads the updated tier from the DB instead of the stale 5-min cache.

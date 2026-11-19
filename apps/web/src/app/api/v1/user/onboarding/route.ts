@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -18,6 +19,14 @@ export async function POST(request: NextRequest) {
   await db.update(users)
     .set({ operationMode })
     .where(eq(users.id, session.user.id));
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "mode_changed",
+    summary:  `Set operation mode to "${operationMode}" during onboarding`,
+    metadata: { operationMode, source: "onboarding" },
+    request,
+  });
 
   // Bust the better-auth session cookie so the new operationMode is reflected immediately
   const response = NextResponse.json({ success: true, operationMode });

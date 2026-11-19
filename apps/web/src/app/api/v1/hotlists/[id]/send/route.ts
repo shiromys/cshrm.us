@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { renderHotlistTable } from "@/lib/hotlist-renderer";
 import { buildUnsubscribeLink, buildOpenTrackingPixel, today } from "@/lib/utils";
+import { logActivity } from "@/lib/activity";
 
 function parseEmails(raw: string): string[] {
   return [...new Set(raw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean))];
@@ -276,6 +277,14 @@ export async function POST(
 
     await db.update(campaigns).set({ status: "sent", sentAt: now }).where(eq(campaigns.id, campaign.id));
     await db.update(hotlists).set({ status: "sent", sentAt: now, updatedAt: now }).where(eq(hotlists.id, id));
+
+    void logActivity({
+      userId:   session.user.id,
+      event:    "hotlist_sent",
+      summary:  `Sent hotlist "${safeHotlist.name}" to ${sentCount} recipient${sentCount !== 1 ? "s" : ""}`,
+      metadata: { hotlistId: id, hotlistName: safeHotlist.name, recipients: sentCount, campaignId: campaign.id },
+      request,
+    });
 
     return NextResponse.json({ success: true, campaignId: campaign.id, recipients: sentCount });
 

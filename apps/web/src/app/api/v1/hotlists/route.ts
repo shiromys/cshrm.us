@@ -4,6 +4,7 @@ import { db, hotlists } from "@/lib/db";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { hotlistSchema } from "@/lib/schemas";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -30,6 +31,14 @@ export async function POST(request: NextRequest) {
     userId: session.user.id,
     ...parsed.data,
   }).returning();
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "hotlist_created",
+    summary:  `Created hotlist "${hotlist.name}"`,
+    metadata: { hotlistId: hotlist.id, name: hotlist.name },
+    request,
+  });
 
   return NextResponse.json(hotlist, { status: 201 });
 }

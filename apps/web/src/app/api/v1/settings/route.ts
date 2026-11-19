@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 const COOKIE_OPTS = { path: "/", httpOnly: true, sameSite: "lax" as const };
 
@@ -23,6 +24,24 @@ export async function PATCH(request: NextRequest) {
   }
 
   await db.update(users).set({ ...update, updatedAt: new Date() }).where(eq(users.id, session.user.id));
+
+  if (modeChanged) {
+    void logActivity({
+      userId:   session.user.id,
+      event:    "mode_changed",
+      summary:  `Switched operation mode to "${body.operationMode}"`,
+      metadata: { operationMode: body.operationMode },
+      request,
+    });
+  } else if (Object.keys(update).length > 0) {
+    void logActivity({
+      userId:   session.user.id,
+      event:    "settings_updated",
+      summary:  `Updated settings: ${Object.keys(update).join(", ")}`,
+      metadata: { fields: Object.keys(update) },
+      request,
+    });
+  }
 
   const response = NextResponse.json({ success: true });
 

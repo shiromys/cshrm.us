@@ -6,3 +6,5 @@ export * from "./campaigns";
 export * from "./hotlists";
 export * from "./csv-batches";
 export * from "./platform-settings";
+export * from "./support-tickets";
+export * from "./activity-logs";

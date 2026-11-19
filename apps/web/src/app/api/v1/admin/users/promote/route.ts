@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 /**
  * POST /api/v1/admin/users/promote
@@ -38,6 +39,14 @@ export async function POST(request: NextRequest) {
   if (!updated) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+
+  void logActivity({
+    userId:   userId,
+    event:    "admin_role_change",
+    summary:  `Admin ${session.user.email} changed role to "${role}"`,
+    metadata: { adminId: session.user.id, newRole: role },
+    request,
+  });
 
   return NextResponse.json({ ok: true, user: updated });
 }

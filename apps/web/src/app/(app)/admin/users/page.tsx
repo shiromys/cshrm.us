@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, ShieldCheck, ShieldOff, UserCheck, UserX } from "lucide-react";
+import { Search, ShieldCheck, ShieldOff, UserCheck, UserX, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
@@ -76,6 +77,7 @@ export default function AdminUsersPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const router = useRouter();
   const users = data?.users ?? [];
   const isBusy = promoteMutation.isPending || statusMutation.isPending;
 
@@ -162,6 +164,18 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
+                            {/* Digital Footprint */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs gap-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                              title="View this user's full activity timeline"
+                              onClick={() => router.push(`/admin/users/${user.id}/activity`)}
+                            >
+                              <Activity className="w-3 h-3" />
+                              Activity
+                            </Button>
+
                             {/* Promote / Demote */}
                             {user.role !== "admin" ? (
                               <Button

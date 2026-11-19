@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 /**
  * POST /api/v1/admin/users/status
@@ -37,6 +38,14 @@ export async function POST(request: NextRequest) {
   if (!updated) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+
+  void logActivity({
+    userId:   userId,
+    event:    "admin_status_change",
+    summary:  `Admin ${session.user.email} set account status to "${status}"`,
+    metadata: { adminId: session.user.id, newStatus: status },
+    request,
+  });
 
   return NextResponse.json({ ok: true, user: updated });
 }
