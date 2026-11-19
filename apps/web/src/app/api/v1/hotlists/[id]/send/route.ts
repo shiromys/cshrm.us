@@ -100,6 +100,7 @@ export async function POST(
 
     const userRecord = await db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, session.user.id) });
     if (!userRecord) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const safeUserRecord = userRecord; // narrow away undefined for closures below
     const isAdmin = userRecord.role === "admin";
     if (!isAdmin && userRecord.tier === "free") {
       return NextResponse.json({ error: "Standard subscription required to send hotlists" }, { status: 403 });
@@ -229,7 +230,7 @@ export async function POST(
           tableHtml,
           introNote,
           senderName,
-          senderCompany: userRecord.companyName,
+          senderCompany: safeUserRecord.companyName,
           unsubLink: `<a href="${buildUnsubscribeLink(r.logId, r.email)}" style="color:#94a3b8;font-size:11px;">Unsubscribe</a>`,
           trackingPixel: buildOpenTrackingPixel(r.logId, r.email),
         });
