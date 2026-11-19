@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,10 +74,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       if (!res.ok) throw new Error("Failed to load ticket");
       return res.json();
     },
-    onSuccess: (t: Ticket) => {
-      setInternalNote(t.internalNote ?? "");
-    },
   });
+
+  useEffect(() => {
+    if (ticket) setInternalNote(ticket.internalNote ?? "");
+  }, [ticket]);
 
   const replyMutation = useMutation({
     mutationFn: async () => {
