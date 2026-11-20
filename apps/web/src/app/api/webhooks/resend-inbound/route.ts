@@ -54,10 +54,13 @@ export async function POST(request: NextRequest) {
   // The webhook URL is known only to Resend, providing implicit security for now.
   console.log("[resend-inbound] Webhook received, processing...");
 
+  console.log("[resend-inbound] Raw body length:", rawBody.length, "preview:", rawBody.slice(0, 100));
+
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(rawBody);
-  } catch {
+  } catch (e) {
+    console.error("[resend-inbound] JSON parse failed:", e);
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
