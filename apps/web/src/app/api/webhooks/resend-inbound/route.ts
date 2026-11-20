@@ -65,18 +65,26 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   // Verify Resend webhook signature (svix HMAC-SHA256)
-  // Svix signs: `${svix-id}.${svix-timestamp}.${rawBody}`
+  // The secret is base64-encoded with a "whsec_" prefix — decode it first.
+  // Svix signs: `${svix-id}.${svix-timestamp}.${rawBody}` → base64(hmac-sha256)
   const secret = process.env.RESEND_INBOUND_SECRET;
   if (secret) {
-    const msgId    = request.headers.get("svix-id") ?? "";
+    const msgId     = request.headers.get("svix-id") ?? "";
     const timestamp = request.headers.get("svix-timestamp") ?? "";
     const signature = request.headers.get("svix-signature") ?? "";
-    const toSign    = `${msgId}.${timestamp}.${rawBody}`;
-    const expected  = createHmac("sha256", secret).update(toSign).digest("base64");
+
+    // Strip "whsec_" prefix if present, then base64-decode to get raw key bytes
+    const secretBase64 = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+    const secretBytes  = Buffer.from(secretBase64, "base64");
+
+    const toSign   = `${msgId}.${timestamp}.${rawBody}`;
+    const expected = createHmac("sha256", secretBytes).update(toSign).digest("base64");
+
     // svix-signature header format: "v1,<base64>" — may have multiple space-separated
     const valid = signature.split(" ").some((s) => s.replace(/^v\d+,/, "") === expected);
     if (!valid) {
       console.warn("[resend-inbound] Signature mismatch — possible spoofed request");
+      console.warn("[resend-inbound] svix-id:", msgId, "svix-timestamp:", timestamp);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
