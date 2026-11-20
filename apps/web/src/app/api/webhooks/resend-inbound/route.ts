@@ -112,8 +112,9 @@ export async function POST(request: NextRequest) {
       try {
         const resendClient = new Resend(process.env.RESEND_API_KEY);
         const fetched = await resendClient.emails.get(emailId);
-        replyText = (fetched.data as Record<string, unknown>)?.text as string
-                 ?? (fetched.data as Record<string, unknown>)?.html as string
+        const fetchedData = fetched.data as unknown as Record<string, unknown> | null;
+        replyText = fetchedData?.text as string
+                 ?? fetchedData?.html as string
                  ?? "";
         console.log("[resend-inbound] Fetched email body length:", replyText.length);
       } catch (e) {
