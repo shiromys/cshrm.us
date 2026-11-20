@@ -45,7 +45,7 @@ function parseFromHeader(from: string): { name: string; email: string } {
  *  Most email clients add "On [date] X wrote:" before the quote block. */
 function stripQuotedReply(text: string): string {
   // Remove everything from the standard "On ... wrote:" divider onwards
-  const divider = text.search(/\nOn .+wrote:/s);
+  const divider = text.search(/\nOn .+wrote:/);
   const cleaned = divider > 0 ? text.slice(0, divider) : text;
   // Also strip lines starting with > (inline quotes)
   return cleaned
