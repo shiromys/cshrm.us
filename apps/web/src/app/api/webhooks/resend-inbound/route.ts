@@ -64,16 +64,16 @@ function stripQuotedReply(text: string): string {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  // Verify Resend webhook signature (HMAC-SHA256)
+  // Verify Resend webhook signature (svix HMAC-SHA256)
+  // Svix signs: `${svix-id}.${svix-timestamp}.${rawBody}`
   const secret = process.env.RESEND_INBOUND_SECRET;
   if (secret) {
-    const signature = request.headers.get("svix-signature") ??
-                      request.headers.get("webhook-signature") ?? "";
-    const timestamp  = request.headers.get("svix-timestamp") ??
-                       request.headers.get("webhook-timestamp") ?? "";
-    const toSign     = `${timestamp}.${rawBody}`;
-    const expected   = createHmac("sha256", secret).update(toSign).digest("hex");
-    // Resend may send multiple signatures (v1,xxxx v1,yyyy) — accept if any match
+    const msgId    = request.headers.get("svix-id") ?? "";
+    const timestamp = request.headers.get("svix-timestamp") ?? "";
+    const signature = request.headers.get("svix-signature") ?? "";
+    const toSign    = `${msgId}.${timestamp}.${rawBody}`;
+    const expected  = createHmac("sha256", secret).update(toSign).digest("base64");
+    // svix-signature header format: "v1,<base64>" — may have multiple space-separated
     const valid = signature.split(" ").some((s) => s.replace(/^v\d+,/, "") === expected);
     if (!valid) {
       console.warn("[resend-inbound] Signature mismatch — possible spoofed request");
