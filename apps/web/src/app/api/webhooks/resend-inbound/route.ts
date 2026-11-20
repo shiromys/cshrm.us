@@ -15,19 +15,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, supportTickets, ticketReplies } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
 
-// ── Resend inbound payload shape ─────────────────────────────────────────────
-// Resend wraps all email fields under `data` for webhook events
-interface ResendInboundPayload {
-  type: string;             // "email.received"
-  data: {
-    from:     string;       // e.g. "John Doe <john@example.com>" or "john@example.com"
-    to:       string | string[];
-    subject:  string;
-    text?:    string;
-    html?:    string;
-    headers?: Record<string, string>;
-  };
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,35 +54,42 @@ export async function POST(request: NextRequest) {
   // The webhook URL is known only to Resend, providing implicit security for now.
   console.log("[resend-inbound] Webhook received, processing...");
 
-  let payload: ResendInboundPayload;
+  let parsed: Record<string, unknown>;
   try {
-    payload = JSON.parse(rawBody);
+    parsed = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Resend wraps email fields under `data`
-  const emailData = payload.data;
-  if (!emailData) {
-    console.warn("[resend-inbound] No data field in payload, type:", payload.type);
-    return NextResponse.json({ ok: false, reason: "Missing data field" });
-  }
+  // Log the full payload structure so we can see what Resend actually sends
+  console.log("[resend-inbound] Payload keys:", Object.keys(parsed));
+  console.log("[resend-inbound] Payload type:", parsed.type);
+  console.log("[resend-inbound] Has data?", !!parsed.data);
+  console.log("[resend-inbound] Raw payload:", JSON.stringify(parsed).slice(0, 500));
 
-  const { from, subject, text } = emailData;
+  // Resend wraps email fields under `data`
+  const emailData = (parsed.data ?? parsed) as Record<string, unknown>;
+  const from    = (emailData.from    ?? "") as string;
+  const subject = (emailData.subject ?? "") as string;
+  const text    = (emailData.text    ?? "") as string;
+
+  console.log("[resend-inbound] from:", from, "subject:", subject);
 
   if (!subject) {
+    console.warn("[resend-inbound] No subject in payload");
     return NextResponse.json({ ok: false, reason: "No subject" });
   }
 
   // 1. Find ticket ID in subject
   const shortId = extractTicketShortId(subject);
+  console.log("[resend-inbound] Short ID extracted:", shortId);
   if (!shortId) {
-    // Not a ticket reply — ignore silently (could be unrelated email)
     console.log("[resend-inbound] No ticket ID in subject, ignoring:", subject);
     return NextResponse.json({ ok: true, reason: "Not a ticket reply" });
   }
 
   // 2. Look up the ticket by short ID (first 8 chars of UUID, uppercased)
+  console.log("[resend-inbound] Looking up ticket:", shortId);
   const ticket = await db.query.supportTickets.findFirst({
     where: sql`upper(substring(${supportTickets.id}::text, 1, 8)) = ${shortId}`,
   });
@@ -104,6 +98,7 @@ export async function POST(request: NextRequest) {
     console.warn("[resend-inbound] Ticket not found for short ID:", shortId);
     return NextResponse.json({ ok: false, reason: "Ticket not found" });
   }
+  console.log("[resend-inbound] Ticket found:", ticket.id);
 
   // 3. Parse the reply body — strip quoted content
   const replyText = text ?? "";
