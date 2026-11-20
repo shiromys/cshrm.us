@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, supportTickets, ticketReplies } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
+import { Resend } from "resend";
 
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,11 +104,28 @@ export async function POST(request: NextRequest) {
   }
   console.log("[resend-inbound] Ticket found:", ticket.id);
 
-  // 3. Parse the reply body — strip quoted content
-  const replyText = text ?? "";
-  const body      = stripQuotedReply(replyText) || replyText.slice(0, 2000).trim();
+  // 3. Fetch full email body — Resend's webhook omits text/html, fetch by email_id
+  let replyText = text; // may be empty from webhook payload
+  if (!replyText) {
+    const emailId = (emailData.email_id ?? "") as string;
+    if (emailId && process.env.RESEND_API_KEY) {
+      try {
+        const resendClient = new Resend(process.env.RESEND_API_KEY);
+        const fetched = await resendClient.emails.get(emailId);
+        replyText = (fetched.data as Record<string, unknown>)?.text as string
+                 ?? (fetched.data as Record<string, unknown>)?.html as string
+                 ?? "";
+        console.log("[resend-inbound] Fetched email body length:", replyText.length);
+      } catch (e) {
+        console.error("[resend-inbound] Failed to fetch email body:", e);
+      }
+    }
+  }
+
+  const body = stripQuotedReply(replyText || "") || (replyText || "").slice(0, 2000).trim();
 
   if (!body) {
+    console.warn("[resend-inbound] Empty reply body after fetch");
     return NextResponse.json({ ok: false, reason: "Empty reply body" });
   }
 
