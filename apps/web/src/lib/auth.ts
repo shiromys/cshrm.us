@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db, schema } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -32,6 +33,21 @@ export const auth = betterAuth({
       const verificationUrl = new URL(url);
       verificationUrl.searchParams.set("callbackURL", "/email-verified");
       await resend.sendEmailVerification(user.email, user.name, verificationUrl.toString());
+    },
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          // Fire-and-forget login event — no request context available here,
+          // so IP/UA won't be captured, but the event timestamp is still useful.
+          void logActivity({
+            userId:  session.userId,
+            event:   "login",
+            summary: "User logged in",
+          });
+        },
+      },
     },
   },
   secret: process.env.BETTER_AUTH_SECRET ?? "build-time-placeholder-secret-do-not-use",
