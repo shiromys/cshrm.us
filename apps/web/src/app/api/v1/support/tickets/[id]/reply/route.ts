@@ -53,8 +53,10 @@ export async function POST(
   }).where(eq(supportTickets.id, id));
 
   // 3. Email the user
-  const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.cloudsourcehrm.us";
-  const from    = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+  const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.cloudsourcehrm.us";
+  const from     = process.env.MAILERCLOUD_FROM_EMAIL ?? process.env.EMAIL_FROM_ADDRESS ?? "info@cloudsourcehrm.us";
+  // Reply-To routes user's email reply back through Resend inbound → webhook → ticket thread
+  const replyTo  = process.env.SUPPORT_REPLY_ADDRESS ?? from;
   let emailedAt: Date | null = null;
 
   const html = `
@@ -83,7 +85,7 @@ export async function POST(
       to:       ticket.submitterEmail,
       toName:   ticket.submitterName,
       fromName: "CloudSourceHRM Support",
-      replyTo:  from,
+      replyTo:  replyTo,
       subject:  `Re: ${ticket.subject} [Ticket #${id.slice(0, 8).toUpperCase()}]`,
       html,
     });
