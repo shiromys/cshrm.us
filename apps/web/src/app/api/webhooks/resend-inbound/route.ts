@@ -14,15 +14,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, supportTickets, ticketReplies } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
+import { createHmac } from "crypto";
 
 // ── Resend inbound payload shape ─────────────────────────────────────────────
+// Resend wraps all email fields under `data` for webhook events
 interface ResendInboundPayload {
-  from:    string;           // e.g. "John Doe <john@example.com>" or "john@example.com"
-  to:      string | string[];
-  subject: string;
-  text?:   string;
-  html?:   string;
-  headers?: Record<string, string>;
+  type: string;             // "email.received"
+  data: {
+    from:     string;       // e.g. "John Doe <john@example.com>" or "john@example.com"
+    to:       string | string[];
+    subject:  string;
+    text?:    string;
+    html?:    string;
+    headers?: Record<string, string>;
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,24 +62,40 @@ function stripQuotedReply(text: string): string {
 
 // ── Webhook handler ───────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  // Verify shared secret to prevent spoofed webhooks
+  const rawBody = await request.text();
+
+  // Verify Resend webhook signature (HMAC-SHA256)
   const secret = process.env.RESEND_INBOUND_SECRET;
   if (secret) {
-    const authHeader = request.headers.get("x-resend-signature") ??
-                       request.nextUrl.searchParams.get("secret");
-    if (authHeader !== secret) {
+    const signature = request.headers.get("svix-signature") ??
+                      request.headers.get("webhook-signature") ?? "";
+    const timestamp  = request.headers.get("svix-timestamp") ??
+                       request.headers.get("webhook-timestamp") ?? "";
+    const toSign     = `${timestamp}.${rawBody}`;
+    const expected   = createHmac("sha256", secret).update(toSign).digest("hex");
+    // Resend may send multiple signatures (v1,xxxx v1,yyyy) — accept if any match
+    const valid = signature.split(" ").some((s) => s.replace(/^v\d+,/, "") === expected);
+    if (!valid) {
+      console.warn("[resend-inbound] Signature mismatch — possible spoofed request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
 
   let payload: ResendInboundPayload;
   try {
-    payload = await request.json();
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { from, subject, text } = payload;
+  // Resend wraps email fields under `data`
+  const emailData = payload.data;
+  if (!emailData) {
+    console.warn("[resend-inbound] No data field in payload, type:", payload.type);
+    return NextResponse.json({ ok: false, reason: "Missing data field" });
+  }
+
+  const { from, subject, text } = emailData;
 
   if (!subject) {
     return NextResponse.json({ ok: false, reason: "No subject" });
@@ -99,8 +120,8 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Parse the reply body — strip quoted content
-  const rawBody  = text ?? "";
-  const body     = stripQuotedReply(rawBody) || rawBody.slice(0, 2000).trim();
+  const replyText = text ?? "";
+  const body      = stripQuotedReply(replyText) || replyText.slice(0, 2000).trim();
 
   if (!body) {
     return NextResponse.json({ ok: false, reason: "Empty reply body" });
