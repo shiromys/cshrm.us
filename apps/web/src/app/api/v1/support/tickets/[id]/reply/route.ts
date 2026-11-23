@@ -4,6 +4,7 @@ import { db, supportTickets, ticketReplies, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { mailercloud } from "@/lib/email/mailercloud";
+import { logActivity } from "@/lib/activity";
 
 function isAdmin(session: Awaited<ReturnType<typeof auth.api.getSession>>) {
   return (session?.user as unknown as Record<string, string>)?.role === "admin";
