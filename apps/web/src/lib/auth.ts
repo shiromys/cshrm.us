@@ -36,11 +36,21 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          void logActivity({
+            userId:  user.id,
+            event:   "register",
+            summary: "Account created",
+            metadata: { email: user.email },
+          });
+        },
+      },
+    },
     session: {
       create: {
         after: async (session) => {
-          // Fire-and-forget login event — no request context available here,
-          // so IP/UA won't be captured, but the event timestamp is still useful.
           void logActivity({
             userId:  session.userId,
             event:   "login",

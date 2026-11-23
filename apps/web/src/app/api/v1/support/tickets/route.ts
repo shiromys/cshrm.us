@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, supportTickets, ticketReplies, users } from "@/lib/db";
 import { desc, eq, or, ilike, and } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 function isAdmin(session: Awaited<ReturnType<typeof auth.api.getSession>>) {
   return (session?.user as unknown as Record<string, string>)?.role === "admin";
@@ -64,6 +65,17 @@ export async function POST(request: NextRequest) {
     subject:        subject.trim(),
     body:           message.trim(),
   }).returning();
+
+  // Log against the authenticated user if logged in
+  if (userId) {
+    void logActivity({
+      userId,
+      event:    "ticket_created",
+      summary:  `Submitted support ticket: "${subject.trim()}"`,
+      metadata: { ticketId: ticket.id, subject: subject.trim(), source },
+      request,
+    });
+  }
 
   return NextResponse.json({ ok: true, ticketId: ticket.id }, { status: 201 });
 }

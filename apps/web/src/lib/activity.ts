@@ -7,11 +7,22 @@
 import { db, activityLogs } from "@/lib/db";
 
 export type ActivityEvent =
+  // ── Auth ──────────────────────────────────────────────────────────────────
   | "login" | "logout" | "register" | "password_changed" | "email_verified"
+  // ── Requirements ──────────────────────────────────────────────────────────
   | "requirement_sent"
-  | "hotlist_created" | "hotlist_sent" | "hotlist_deleted"
+  // ── Hotlists ──────────────────────────────────────────────────────────────
+  | "hotlist_created" | "hotlist_updated" | "hotlist_sent" | "hotlist_deleted"
+  // ── Contacts ──────────────────────────────────────────────────────────────
   | "csv_uploaded" | "contact_added" | "contact_deleted"
+  // ── Settings & tier ───────────────────────────────────────────────────────
   | "settings_updated" | "tier_upgraded" | "mode_changed"
+  // ── Support tickets ───────────────────────────────────────────────────────
+  | "ticket_created" | "ticket_replied" | "ticket_resolved"
+  // ── Billing (Stripe) ──────────────────────────────────────────────────────
+  | "subscription_started" | "subscription_cancelled" | "subscription_renewed"
+  | "payment_succeeded" | "payment_failed" | "refund_issued"
+  // ── Admin actions (logged against target user) ────────────────────────────
   | "admin_tier_override" | "admin_status_change" | "admin_role_change";
 
 export async function logActivity(opts: {

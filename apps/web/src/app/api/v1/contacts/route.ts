@@ -5,6 +5,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { NewContact } from "@cloudsourcehrm/db/schema";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -102,6 +103,14 @@ export async function POST(request: NextRequest) {
       inserted += toInsert.slice(i, i + CHUNK).length;
     }
 
+    void logActivity({
+      userId:   session.user.id,
+      event:    "csv_uploaded",
+      summary:  `Imported ${inserted} ${contactType} contacts from CSV/XLSX`,
+      metadata: { inserted, skipped: rows.length - inserted, contactType, fileName: file.name },
+      request,
+    });
+
     revalidatePath("/dashboard");
     return NextResponse.json({ inserted, skipped: rows.length - inserted }, { status: 201 });
   }
@@ -116,6 +125,14 @@ export async function POST(request: NextRequest) {
     source: "manual",
     addedBy: session.user.id,
   }).returning();
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "contact_added",
+    summary:  `Added ${body.contactType} contact: ${body.name} (${body.email})`,
+    metadata: { contactId: contact.id, name: body.name, email: body.email, contactType: body.contactType },
+    request,
+  });
 
   revalidatePath("/dashboard");
   return NextResponse.json(contact, { status: 201 });

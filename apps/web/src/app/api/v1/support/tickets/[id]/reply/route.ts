@@ -96,5 +96,23 @@ export async function POST(
     // Non-fatal — reply is stored even if email fails
   }
 
+  void logActivity({
+    userId:   session.user.id,
+    event:    "ticket_replied",
+    summary:  `Replied to support ticket #${id.slice(0, 8).toUpperCase()}: "${ticket.subject}"`,
+    metadata: { ticketId: id, replyId: reply.id, newStatus: newStatus, emailed: !!emailedAt },
+    request,
+  });
+
+  if (isResolved) {
+    void logActivity({
+      userId:   session.user.id,
+      event:    "ticket_resolved",
+      summary:  `Ticket #${id.slice(0, 8).toUpperCase()} marked as "${newStatus}": "${ticket.subject}"`,
+      metadata: { ticketId: id, status: newStatus },
+      request,
+    });
+  }
+
   return NextResponse.json({ ok: true, replyId: reply.id, emailed: !!emailedAt });
 }

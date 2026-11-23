@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { contacts } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 async function getSession() {
   return auth.api.getSession({ headers: await headers() });
@@ -50,7 +51,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -60,6 +61,18 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  const [existing] = await db.select({ name: contacts.name, email: contacts.email, contactType: contacts.contactType })
+    .from(contacts).where(eq(contacts.id, id));
+
   await db.delete(contacts).where(eq(contacts.id, id));
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "contact_deleted",
+    summary:  `Deleted contact: ${existing?.name ?? id} (${existing?.email ?? ""})`,
+    metadata: { contactId: id, name: existing?.name, email: existing?.email, contactType: existing?.contactType },
+    request:  req,
+  });
+
   return NextResponse.json({ success: true });
 }

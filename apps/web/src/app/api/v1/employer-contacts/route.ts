@@ -5,6 +5,7 @@ import { eq, and, or, ilike } from "drizzle-orm";
 import { headers } from "next/headers";
 import * as XLSX from "xlsx";
 import type { NewEmployerContact } from "@cloudsourcehrm/db/schema";
+import { logActivity } from "@/lib/activity";
 
 // Flexible column name mapping — covers common spreadsheet header variations
 function normalise(raw: Record<string, unknown>): Partial<NewEmployerContact> | null {
@@ -91,6 +92,14 @@ export async function POST(request: NextRequest) {
       inserted += chunk.length;
     }
 
+    void logActivity({
+      userId:   session.user.id,
+      event:    "csv_uploaded",
+      summary:  `Imported ${inserted} employer contacts from CSV/XLSX (My Contacts)`,
+      metadata: { inserted, skipped: rows.length - inserted, fileName: file.name },
+      request,
+    });
+
     return NextResponse.json({ inserted, skipped: rows.length - inserted }, { status: 201 });
   }
 
@@ -100,6 +109,14 @@ export async function POST(request: NextRequest) {
     userId: session.user.id,
     ...body,
   }).returning();
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "contact_added",
+    summary:  `Added employer contact: ${body.name ?? ""} (${body.email ?? ""})`,
+    metadata: { contactId: contact.id, name: body.name, email: body.email },
+    request,
+  });
 
   return NextResponse.json(contact, { status: 201 });
 }

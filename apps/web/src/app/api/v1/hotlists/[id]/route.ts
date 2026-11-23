@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { hotlists } from "@/lib/db";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { logActivity } from "@/lib/activity";
 
 async function getSession() {
   return auth.api.getSession({ headers: await headers() });
@@ -44,20 +45,43 @@ export async function PATCH(
     .returning();
 
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "hotlist_updated",
+    summary:  `Updated hotlist "${updated.name}"`,
+    metadata: { hotlistId: id, name: updated.name, fields: Object.keys(updateData) },
+    request:  req,
+  });
+
   return NextResponse.json(updated);
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  // Fetch name before deleting for the log summary
+  const [existing] = await db.select({ name: hotlists.name })
+    .from(hotlists)
+    .where(and(eq(hotlists.id, id), eq(hotlists.userId, session.user.id)));
+
   await db
     .delete(hotlists)
     .where(and(eq(hotlists.id, id), eq(hotlists.userId, session.user.id)));
+
+  void logActivity({
+    userId:   session.user.id,
+    event:    "hotlist_deleted",
+    summary:  `Deleted hotlist "${existing?.name ?? id}"`,
+    metadata: { hotlistId: id, name: existing?.name },
+    request:  req,
+  });
 
   return NextResponse.json({ success: true });
 }
