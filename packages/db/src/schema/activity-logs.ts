@@ -14,16 +14,28 @@ export const activityEventEnum = pgEnum("activity_event", [
   "requirement_sent",
   // Hotlists
   "hotlist_created",
+  "hotlist_updated",
   "hotlist_sent",
   "hotlist_deleted",
   // Contacts
   "csv_uploaded",
   "contact_added",
   "contact_deleted",
-  // Settings / billing
+  // Settings / tier
   "settings_updated",
   "tier_upgraded",
   "mode_changed",
+  // Support tickets
+  "ticket_created",
+  "ticket_replied",
+  "ticket_resolved",
+  // Billing (Stripe)
+  "subscription_started",
+  "subscription_cancelled",
+  "subscription_renewed",
+  "payment_succeeded",
+  "payment_failed",
+  "refund_issued",
   // Admin actions on user
   "admin_tier_override",
   "admin_status_change",
