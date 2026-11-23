@@ -47,7 +47,7 @@ function stripQuotes(text: string): string {
     .split("\n")
     .filter((line) => !line.trimStart().startsWith(">"))
     .join("\n")
-    .replace(/\nOn .+wrote:/s, "")   // "On [date] X wrote:" divider
+    .replace(/\nOn [\s\S]+?wrote:/, "")   // "On [date] X wrote:" divider
     .trim();
 }
 
